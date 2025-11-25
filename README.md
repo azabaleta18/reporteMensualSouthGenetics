@@ -67,6 +67,18 @@ La aplicación estará disponible en [http://localhost:3000](http://localhost:30
 └── package.json
 ```
 
+## Deployment en Vercel
+
+Para desplegar la aplicación en Vercel, consulta la guía completa en [VERCEL_DEPLOY.md](./VERCEL_DEPLOY.md)
+
+### Resumen rápido:
+
+1. Conecta tu repositorio de GitHub con Vercel
+2. Configura las variables de entorno en Vercel:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+3. Vercel desplegará automáticamente tu aplicación
+
 ## Tecnologías Utilizadas
 
 - **Next.js 14** - Framework de React
@@ -74,4 +86,6 @@ La aplicación estará disponible en [http://localhost:3000](http://localhost:30
 - **Tailwind CSS** - Estilos
 - **Supabase** - Base de datos y backend
 - **Lucide React** - Iconos
+- **jsPDF** - Generación de PDFs
+- **XLSX** - Exportación a Excel
 
