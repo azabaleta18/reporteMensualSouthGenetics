@@ -190,16 +190,16 @@ export function exportarExcel(opciones: OpcionesExportacion): void {
       
       if (!expandida) {
         const valorMostrar = mostrarEnUSD ? convertirAUSD(totalDivisa, divisa, tasasCambio) : totalDivisa
-        fila.push(valorMostrar > 0 ? valorMostrar : null)
+        fila.push(valorMostrar > 0 ? valorMostrar : 0)
       } else {
         const cuentasDivisa = CUENTAS_ORDENADAS.filter(c => c.divisa === divisa)
         cuentasDivisa.forEach((cuenta) => {
           const valorOriginal = dato.valores[cuenta.nombreCompleto] || 0
           const valorMostrar = mostrarEnUSD ? convertirAUSD(valorOriginal, divisa, tasasCambio) : valorOriginal
-          fila.push(valorMostrar > 0 ? valorMostrar : null)
+          fila.push(valorMostrar > 0 ? valorMostrar : 0)
         })
         const valorTotal = mostrarEnUSD ? convertirAUSD(totalDivisa, divisa, tasasCambio) : totalDivisa
-        fila.push(valorTotal > 0 ? valorTotal : null)
+        fila.push(valorTotal > 0 ? valorTotal : 0)
       }
     })
     
@@ -221,7 +221,7 @@ export function exportarExcel(opciones: OpcionesExportacion): void {
       const porcentaje = totalGeneralUSD > 0 ? (totalDivisaUSD / totalGeneralUSD) * 100 : 0
       
       if (!expandida) {
-        filaPorcentajes.push(porcentaje > 0 ? porcentaje : null)
+        filaPorcentajes.push(porcentaje > 0 ? porcentaje : 0)
       } else {
         const cuentasDivisa = CUENTAS_ORDENADAS.filter(c => c.divisa === divisa)
         cuentasDivisa.forEach((cuenta) => {
@@ -230,10 +230,10 @@ export function exportarExcel(opciones: OpcionesExportacion): void {
           const porcentajeCuenta = totalGeneralUSD > 0 ? (totalCuentaUSD / totalGeneralUSD) * 100 : 0
           filaPorcentajes.push(porcentajeCuenta > 0 ? porcentajeCuenta : 0)
         })
-        filaPorcentajes.push(porcentaje > 0 ? porcentaje : null)
+        filaPorcentajes.push(porcentaje > 0 ? porcentaje : 0)
       }
     })
-    filaPorcentajes.push(totalGeneralUSD > 0 ? 100 : null)
+    filaPorcentajes.push(totalGeneralUSD > 0 ? 100 : 0)
     filas.push(filaPorcentajes)
   }
   
