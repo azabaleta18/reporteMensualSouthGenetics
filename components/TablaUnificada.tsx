@@ -6,8 +6,12 @@ import { obtenerRegistrosAgrupadosPorFecha, obtenerRegistrosPorBancoYDivisa, cre
 import { obtenerTasasCambio } from '@/lib/divisas'
 import { ChevronRight, ChevronDown, Database, DollarSign, Eye, EyeOff, Calendar, Globe } from 'lucide-react'
 import { COLORES_TABLA } from '@/lib/colores'
+import PanelFiltros from './PanelFiltros'
+import BotonExportar from './BotonExportar'
+import { FiltrosReporte, FILTROS_INICIALES, aplicarFiltros } from '@/lib/filtros'
+import { OpcionesExportacion } from '@/lib/exportacion'
 
-interface DatosPorFecha {
+export interface DatosPorFecha {
   fecha: string
   valores: Record<string, number> // clave: nombreCompleto de cuenta o divisa, valor: cantidad acumulada
   totalesPorDivisa: Record<Divisa, number>
@@ -33,6 +37,7 @@ export default function TablaUnificada() {
   const [agruparPorMes, setAgruparPorMes] = useState(true)
   const [mesesExpandidos, setMesesExpandidos] = useState<Record<string, boolean>>({})
   const [todoEnUSD, setTodoEnUSD] = useState(false)
+  const [filtros, setFiltros] = useState<FiltrosReporte>(FILTROS_INICIALES)
 
   useEffect(() => {
     cargarDatos()
@@ -225,26 +230,47 @@ export default function TablaUnificada() {
           totalUSD += cantidad * tasa
         })
 
-        // Agregar fila de agrupación por mes
-        datos.push({
-          fecha: obtenerNombreMes(mesAnio),
-          valores: { ...valoresMes },
-          totalesPorDivisa: { ...totalesPorDivisaMes },
-          totalUSD,
-          esAgrupacion: true,
-          mesAnio,
-          fechasAgrupadas: fechasDelMes,
+        // Filtrar fechas del mes según los filtros antes de agregar la agrupación
+        const fechasDelMesFiltradas = fechasDelMes.filter((fecha) => {
+          if (filtros.fechaDesde) {
+            if (fecha < filtros.fechaDesde) return false
+          }
+          if (filtros.fechaHasta) {
+            if (fecha > filtros.fechaHasta) return false
+          }
+          return true
         })
+
+        // Solo agregar la agrupación si hay fechas que pasan el filtro
+        if (fechasDelMesFiltradas.length > 0) {
+          // Agregar fila de agrupación por mes
+          datos.push({
+            fecha: obtenerNombreMes(mesAnio),
+            valores: { ...valoresMes },
+            totalesPorDivisa: { ...totalesPorDivisaMes },
+            totalUSD,
+            esAgrupacion: true,
+            mesAnio,
+            fechasAgrupadas: fechasDelMesFiltradas, // Usar fechas filtradas
+          })
+        }
 
         // Si el mes está expandido, agregar las fechas individuales
         if (mesesExpandidos[mesAnio]) {
+          // Filtrar fechas según los filtros aplicados antes de procesarlas
+          const fechasFiltradas = fechasDelMes.filter((fecha) => {
+            if (filtros.fechaDesde && fecha < filtros.fechaDesde) return false
+            if (filtros.fechaHasta && fecha > filtros.fechaHasta) return false
+            return true
+          })
+
           // Resetear acumulados para recalcular desde el inicio
           const valoresAcumuladosParaFechas: Record<string, number> = {}
           const totalesPorDivisaParaFechas: Record<Divisa, number> = {
             ARS: 0, CLP: 0, COP: 0, EUR: 0, MXN: 0, UYU: 0, USD: 0
           }
 
-          fechasDelMes.forEach((fecha) => {
+          fechasFiltradas.forEach((fecha) => {
             const registros = registrosPorFecha[fecha]
             
             registros.forEach((registro) => {
@@ -263,13 +289,15 @@ export default function TablaUnificada() {
               }
             })
 
-            // Calcular acumulados hasta esta fecha (incluyendo todas las fechas anteriores)
+            // Calcular acumulados hasta esta fecha (incluyendo todas las fechas anteriores, pero solo las que están en el rango o antes)
             const valoresHastaFecha: Record<string, number> = {}
             const totalesHastaFecha: Record<Divisa, number> = {
               ARS: 0, CLP: 0, COP: 0, EUR: 0, MXN: 0, UYU: 0, USD: 0
             }
 
-            fechas.filter(f => f <= fecha).forEach((f) => {
+            // Incluir todas las fechas hasta esta fecha, pero respetar el filtro fechaDesde
+            const fechaLimiteInferior = filtros.fechaDesde || '0000-01-01'
+            fechas.filter(f => f <= fecha && f >= fechaLimiteInferior).forEach((f) => {
               const regs = registrosPorFecha[f]
               regs.forEach((registro) => {
                 const cuentasCoincidentes = CUENTAS_ORDENADAS.filter(
@@ -344,7 +372,22 @@ export default function TablaUnificada() {
     }
 
     return datos
-  }, [registrosPorFecha, tasasCambio, agruparPorMes, mesesExpandidos])
+  }, [registrosPorFecha, tasasCambio, agruparPorMes, mesesExpandidos, filtros])
+
+  // Aplicar filtros a los datos procesados
+  const datosFiltrados = useMemo(() => {
+    return aplicarFiltros(datosProcesados, filtros)
+  }, [datosProcesados, filtros])
+
+  // Filtrar divisas a mostrar según los filtros
+  const divisasAMostrar = useMemo(() => {
+    if (filtros.divisas.length === 0) {
+      // Si no hay divisas seleccionadas, mostrar todas
+      return DIVISAS
+    }
+    // Mostrar solo las divisas seleccionadas
+    return DIVISAS.filter(d => filtros.divisas.includes(d.codigo))
+  }, [filtros.divisas])
 
   const formatearMonto = (monto: number) => {
     return monto.toLocaleString('es-ES', {
@@ -379,13 +422,29 @@ export default function TablaUnificada() {
     )
   }
 
+  // Opciones para exportación
+  const opcionesExportacion: OpcionesExportacion = {
+    datos: datosFiltrados,
+    divisasExpandidas,
+    modoResumen,
+    todoEnUSD,
+    divisasEnUSD,
+    tasasCambio,
+    agruparPorMes,
+    divisasAMostrar: filtros.divisas.length > 0 ? filtros.divisas : undefined,
+  }
+
   return (
     <div className="rounded-xl shadow-lg overflow-hidden border" style={{ backgroundColor: COLORES_TABLA.fondoGeneral, borderColor: COLORES_TABLA.bordeGeneral }}>
-      <div className="p-5 border-b flex items-center justify-between" style={{ backgroundColor: COLORES_TABLA.fondoEncabezado, borderColor: COLORES_TABLA.bordeGeneral }}>
-        <h2 className="text-xl font-semibold" style={{ color: COLORES_TABLA.textoGeneral }}>
-          Reporte Mensual de Divisas
-        </h2>
-        <div className="flex items-center gap-3">
+      <div className="p-5 border-b" style={{ backgroundColor: COLORES_TABLA.fondoEncabezado, borderColor: COLORES_TABLA.bordeGeneral }}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold" style={{ color: COLORES_TABLA.textoGeneral }}>
+            Reporte Mensual de Divisas
+          </h2>
+          <BotonExportar opciones={opcionesExportacion} />
+        </div>
+        <PanelFiltros filtros={filtros} onFiltrosChange={setFiltros} />
+        <div className="flex items-center gap-3 flex-wrap mt-4">
           <button
             onClick={() => setAgruparPorMes(!agruparPorMes)}
             className="flex items-center gap-2 px-4 py-2 text-sm text-white rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
@@ -441,28 +500,28 @@ export default function TablaUnificada() {
       <div className="overflow-x-auto custom-scrollbar">
         <style jsx>{`
           .custom-scrollbar::-webkit-scrollbar {
-            height: 14px;
+            height: 20px;
           }
           .custom-scrollbar::-webkit-scrollbar-track {
-            background: ${COLORES_TABLA.fondoAlterno};
+            background: ${COLORES_TABLA.scrollbarTrack};
             border-radius: 4px;
           }
           .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: ${COLORES_TABLA.botonSecundario};
+            background: ${COLORES_TABLA.scrollbarThumb};
             border-radius: 4px;
             transition: background 0.2s;
           }
           .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: ${COLORES_TABLA.botonPrincipal};
+            background: ${COLORES_TABLA.scrollbarThumbHover};
           }
           .dark .custom-scrollbar::-webkit-scrollbar-track {
-            background: #e2e8f0;
+            background: ${COLORES_TABLA.scrollbarDarkTrack};
           }
           .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
+            background: ${COLORES_TABLA.scrollbarDarkThumb};
           }
           .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
+            background: ${COLORES_TABLA.scrollbarDarkThumbHover};
           }
         `}</style>
         <table className="w-full text-sm">
@@ -476,54 +535,68 @@ export default function TablaUnificada() {
               >
                 Fecha
               </th>
-              {DIVISAS.map((divisaInfo) => {
+              {divisasAMostrar.map((divisaInfo, index) => {
                 const divisa = divisaInfo.codigo
                 const expandida = divisasExpandidas[divisa] && !modoResumen
                 const bancos = obtenerBancosDivisa(divisa)
                 const cuentasDivisa = CUENTAS_ORDENADAS.filter(c => c.divisa === divisa)
                 // Número de columnas: cuentas + 1 columna de total si está expandida
                 const numColumnas = expandida ? cuentasDivisa.length + 1 : 1
+                // Alternar colores: índice par = color normal, índice impar = color alterno
+                const colorFondo = index % 2 === 0 
+                  ? COLORES_TABLA.fondoTotalDivisa 
+                  : COLORES_TABLA.fondoEncabezadoAlterno
                 
                 return (
                   <th
                     key={divisa}
                     colSpan={numColumnas}
                     rowSpan={expandida ? 1 : (Object.values(divisasExpandidas).some(v => v && !modoResumen) ? 2 : 1)}
-                    className="px-4 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider border-l"
-                    style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, borderColor: COLORES_TABLA.bordeEncabezado }}
+                    className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider border-l"
+                    style={{ backgroundColor: colorFondo, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
                   >
                     <div className="flex items-center justify-center gap-2">
                       {!modoResumen && (
                         <button
                           onClick={() => toggleDivisa(divisa)}
                           className="p-1.5 rounded-md transition-all duration-200"
-                          style={{ backgroundColor: 'transparent' }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORES_TABLA.botonPrincipal + '80'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                          style={{ backgroundColor: COLORES_TABLA.botonTransparente }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORES_TABLA.botonPrincipalHover}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = COLORES_TABLA.botonTransparente}
                           title={expandida ? 'Colapsar' : 'Expandir'}
                         >
                           {expandida ? (
-                            <ChevronDown className="w-4 h-4 text-white" />
+                            <ChevronDown className="w-4 h-4" style={{ color: COLORES_TABLA.textoGeneral }} />
                           ) : (
-                            <ChevronRight className="w-4 h-4 text-white" />
+                            <ChevronRight className="w-4 h-4" style={{ color: COLORES_TABLA.textoGeneral }} />
                           )}
                         </button>
                       )}
-                      <span className="font-bold text-white">{divisa}</span>
+                      <span className="font-bold" style={{ color: COLORES_TABLA.textoGeneral }}>{divisa}</span>
                       {divisa !== 'USD' && (
                         <button
                           onClick={() => toggleDivisaUSD(divisa)}
                           className="p-1.5 rounded-md transition-all duration-200"
                           style={{ 
-                            backgroundColor: (todoEnUSD || divisasEnUSD[divisa]) ? COLORES_TABLA.botonPrincipal : 'transparent',
-                            color: 'white'
+                            backgroundColor: (todoEnUSD || divisasEnUSD[divisa]) 
+                              ? COLORES_TABLA.botonPrincipal 
+                              : COLORES_TABLA.botonSecundarioHover,
+                            color: COLORES_TABLA.textoGeneral
                           }}
-                          onMouseEnter={(e) => !todoEnUSD && !divisasEnUSD[divisa] && (e.currentTarget.style.backgroundColor = COLORES_TABLA.botonPrincipal + '80')}
-                          onMouseLeave={(e) => !todoEnUSD && !divisasEnUSD[divisa] && (e.currentTarget.style.backgroundColor = 'transparent')}
+                          onMouseEnter={(e) => {
+                            if (!todoEnUSD && !divisasEnUSD[divisa]) {
+                              e.currentTarget.style.backgroundColor = COLORES_TABLA.botonPrincipalHover
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!todoEnUSD && !divisasEnUSD[divisa]) {
+                              e.currentTarget.style.backgroundColor = COLORES_TABLA.botonSecundarioHover
+                            }
+                          }}
                           title={(todoEnUSD || divisasEnUSD[divisa]) ? 'Mostrar en ' + divisa : 'Mostrar en USD'}
                           disabled={todoEnUSD}
                         >
-                          <DollarSign className="w-3 h-3 text-white" />
+                          <DollarSign className="w-3 h-3" style={{ color: COLORES_TABLA.textoGeneral }} />
                         </button>
                       )}
                     </div>
@@ -532,8 +605,8 @@ export default function TablaUnificada() {
               })}
               <th 
                 rowSpan={Object.values(divisasExpandidas).some(v => v && !modoResumen) ? 2 : 1}
-                className="px-4 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider sticky right-0 z-20 border-l min-w-[120px] shadow-[-2px_0_2px_rgba(0,0,0,0.05)]"
-                style={{ backgroundColor: COLORES_TABLA.fondoTotalUSD, borderColor: COLORES_TABLA.bordeEncabezado }}
+                className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider sticky right-0 z-20 border-l min-w-[120px] shadow-[-2px_0_2px_rgba(0,0,0,0.05)]"
+                style={{ backgroundColor: COLORES_TABLA.fondoTotalUSD, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
               >
                 Total USD
               </th>
@@ -541,7 +614,7 @@ export default function TablaUnificada() {
             {/* Segunda fila: Subencabezados de cuentas bancarias cuando están expandidos */}
             {Object.values(divisasExpandidas).some(v => v && !modoResumen) && (
               <tr>
-                {DIVISAS.map((divisaInfo) => {
+                {divisasAMostrar.map((divisaInfo, index) => {
                   const divisa = divisaInfo.codigo
                   const expandida = divisasExpandidas[divisa] && !modoResumen
                   
@@ -550,6 +623,10 @@ export default function TablaUnificada() {
                   }
                   
                   const cuentasDivisa = CUENTAS_ORDENADAS.filter(c => c.divisa === divisa)
+                  // Usar el mismo color que la divisa padre (alternado)
+                  const colorFondo = index % 2 === 0 
+                    ? COLORES_TABLA.fondoTotalDivisa 
+                    : COLORES_TABLA.fondoEncabezadoAlterno
                   
                   return (
                     <>
@@ -557,15 +634,15 @@ export default function TablaUnificada() {
                         <th
                           key={cuenta.nombreCompleto}
                           className="px-3 py-2 text-[10px] font-medium text-left whitespace-nowrap border-t border-l"
-                          style={{ backgroundColor: COLORES_TABLA.fondoEncabezado, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
+                          style={{ backgroundColor: colorFondo, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
                         >
                           {cuenta.nombreCompleto}
                         </th>
                       ))}
                       {/* Columna de total por divisa */}
                       <th
-                        className="px-3 py-2 text-[10px] font-semibold text-white border-t border-l text-center whitespace-nowrap"
-                        style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, borderColor: COLORES_TABLA.bordeEncabezado }}
+                        className="px-3 py-2 text-[10px] font-semibold border-t border-l text-center whitespace-nowrap"
+                        style={{ backgroundColor: colorFondo, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
                       >
                         Total {divisa}
                       </th>
@@ -576,12 +653,12 @@ export default function TablaUnificada() {
             )}
           </thead>
           <tbody style={{ backgroundColor: COLORES_TABLA.fondoGeneral }} className="divide-y">
-            {datosProcesados.length === 0 ? (
+            {datosFiltrados.length === 0 ? (
               <tr>
                 <td 
                   colSpan={
                     1 + 
-                    DIVISAS.reduce((sum, d) => {
+                    divisasAMostrar.reduce((sum, d) => {
                       const expandida = divisasExpandidas[d.codigo] && !modoResumen
                       if (expandida) {
                         const cuentasDivisa = CUENTAS_ORDENADAS.filter(c => c.divisa === d.codigo)
@@ -597,22 +674,22 @@ export default function TablaUnificada() {
                 </td>
               </tr>
             ) : (
-              datosProcesados.map((dato, index) => (
+              datosFiltrados.map((dato, index) => (
                 <tr
                   key={dato.fecha}
                   className={`transition-colors duration-150 ${dato.esAgrupacion ? 'font-semibold' : ''}`}
                   style={{ 
                     backgroundColor: dato.esAgrupacion 
-                      ? COLORES_TABLA.fondoEncabezado
-                      : (index % 2 === 0 ? COLORES_TABLA.fondoGeneral : COLORES_TABLA.fondoAlterno)
+                      ? COLORES_TABLA.fondoAgrupacion
+                      : COLORES_TABLA.fondoFila
                   }}
                 >
                   <td 
                     className={`px-4 py-3 whitespace-nowrap text-xs font-medium sticky left-0 z-20 border-r shadow-[2px_0_2px_rgba(0,0,0,0.05)]`}
                     style={{ 
                       backgroundColor: dato.esAgrupacion 
-                        ? COLORES_TABLA.fondoEncabezado
-                        : (index % 2 === 0 ? COLORES_TABLA.fondoGeneral : COLORES_TABLA.fondoAlterno),
+                        ? COLORES_TABLA.fondoAgrupacion
+                        : COLORES_TABLA.fondoFila,
                       color: COLORES_TABLA.textoGeneral,
                       borderColor: COLORES_TABLA.bordeEncabezado
                     }}
@@ -622,9 +699,9 @@ export default function TablaUnificada() {
                         <button
                           onClick={() => toggleMes(dato.mesAnio!)}
                           className="p-1 rounded transition-colors"
-                          style={{ backgroundColor: 'transparent' }}
+                          style={{ backgroundColor: COLORES_TABLA.botonTransparente }}
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORES_TABLA.botonSecundario}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = COLORES_TABLA.botonTransparente}
                           title={mesesExpandidos[dato.mesAnio!] ? 'Colapsar' : 'Expandir'}
                         >
                           {mesesExpandidos[dato.mesAnio!] ? (
@@ -639,7 +716,7 @@ export default function TablaUnificada() {
                       formatearFecha(dato.fecha)
                     )}
                   </td>
-                  {DIVISAS.map((divisaInfo) => {
+                  {divisasAMostrar.map((divisaInfo) => {
                     const divisa = divisaInfo.codigo
                     const expandida = divisasExpandidas[divisa] && !modoResumen
                     const totalDivisa = dato.totalesPorDivisa[divisa] || 0
@@ -653,7 +730,7 @@ export default function TablaUnificada() {
                         <td
                           key={divisa}
                           className="px-4 py-3 text-right text-xs font-semibold whitespace-nowrap border-l"
-                          style={{ backgroundColor: COLORES_TABLA.fondoMonto, color: COLORES_TABLA.textoMonto, borderColor: COLORES_TABLA.bordeEncabezado }}
+                          style={{ backgroundColor: COLORES_TABLA.fondoMonto, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
                         >
                           {valorMostrar > 0 ? `${simbolo} ${formatearMonto(valorMostrar)}` : '-'}
                         </td>
@@ -672,7 +749,7 @@ export default function TablaUnificada() {
                             <td
                               key={cuenta.nombreCompleto}
                               className="px-3 py-2.5 text-right text-xs whitespace-nowrap border-l"
-                              style={{ backgroundColor: COLORES_TABLA.fondoMonto, color: COLORES_TABLA.textoMonto, borderColor: COLORES_TABLA.bordeEncabezado }}
+                              style={{ backgroundColor: COLORES_TABLA.fondoMonto, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
                             >
                               {valorMostrar > 0 ? `${simbolo} ${formatearMonto(valorMostrar)}` : '-'}
                             </td>
@@ -680,8 +757,8 @@ export default function TablaUnificada() {
                         })}
                         {/* Columna de total por divisa */}
                         <td
-                          className="px-3 py-2.5 text-right text-xs font-semibold text-white whitespace-nowrap border-l"
-                          style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, borderColor: COLORES_TABLA.bordeEncabezado }}
+                          className="px-3 py-2.5 text-right text-xs font-semibold whitespace-nowrap border-l"
+                          style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisaNumeros, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
                         >
                           {totalDivisa > 0 ? `${simbolo} ${formatearMonto(mostrarEnUSD ? convertirAUSD(totalDivisa, divisa) : totalDivisa)}` : '-'}
                         </td>
@@ -689,123 +766,45 @@ export default function TablaUnificada() {
                     )
                   })}
                   <td 
-                    className="px-4 py-3 text-right text-xs font-bold text-white sticky right-0 z-20 border-l shadow-[-2px_0_2px_rgba(0,0,0,0.05)] whitespace-nowrap"
-                    style={{ backgroundColor: COLORES_TABLA.fondoTotalUSD, borderColor: COLORES_TABLA.bordeEncabezado }}
+                    className="px-4 py-3 text-right text-xs font-bold sticky right-0 z-20 border-l shadow-[-2px_0_2px_rgba(0,0,0,0.05)] whitespace-nowrap"
+                    style={{ backgroundColor: COLORES_TABLA.fondoTotalUSDNumeros, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
                   >
                     US$ {formatearMonto(dato.totalUSD)}
                   </td>
                 </tr>
               ))
             )}
-            {/* Fila de totales generales */}
-            {datosProcesados.length > 0 && (
-              <tr className="font-bold border-t-2" style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, borderColor: COLORES_TABLA.bordeTotal }}>
-                <td 
-                  className="px-4 py-3.5 text-xs font-bold text-white sticky left-0 z-20 border-r shadow-[2px_0_2px_rgba(0,0,0,0.05)] whitespace-nowrap"
-                  style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, borderColor: COLORES_TABLA.bordeEncabezado }}
-                >
-                  TOTAL
-                </td>
-                {DIVISAS.map((divisaInfo) => {
-                  const divisa = divisaInfo.codigo
-                  const expandida = divisasExpandidas[divisa] && !modoResumen
-                  const mostrarEnUSD = todoEnUSD || divisasEnUSD[divisa]
-                  const simbolo = mostrarEnUSD ? 'US$' : obtenerSimboloDivisa(divisa)
-                  
-                  // Calcular total acumulado de la divisa
-                  // Si está agrupado por mes, usar el último valor de las filas agrupadas
-                  // Si no está agrupado, usar el último valor de todas las filas
-                  const totalFinal = agruparPorMes
-                    ? (datosProcesados.filter(d => d.esAgrupacion).slice(-1)[0]?.totalesPorDivisa[divisa] || 0)
-                    : (datosProcesados.filter(d => !d.esAgrupacion).slice(-1)[0]?.totalesPorDivisa[divisa] || 0)
-                  
-                  if (!expandida) {
-                    const valorMostrar = mostrarEnUSD ? convertirAUSD(totalFinal, divisa) : totalFinal
-                    return (
-                      <td
-                        key={divisa}
-                        className="px-4 py-3.5 text-right text-xs font-bold text-white whitespace-nowrap border-l"
-                        style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, borderColor: COLORES_TABLA.bordeEncabezado }}
-                      >
-                        {valorMostrar > 0 ? `${simbolo} ${formatearMonto(valorMostrar)}` : '-'}
-                      </td>
-                    )
-                  }
-                  
-                  // Mostrar columnas de cuentas bancarias expandidas con totales
-                  const cuentasDivisa = CUENTAS_ORDENADAS.filter(c => c.divisa === divisa)
-                  
-                  return (
-                    <>
-                      {cuentasDivisa.map((cuenta) => {
-                        const totalCuentaFinal = agruparPorMes
-                          ? (datosProcesados.filter(d => d.esAgrupacion).slice(-1)[0]?.valores[cuenta.nombreCompleto] || 0)
-                          : (datosProcesados.filter(d => !d.esAgrupacion).slice(-1)[0]?.valores[cuenta.nombreCompleto] || 0)
-                        const valorMostrar = mostrarEnUSD ? convertirAUSD(totalCuentaFinal, divisa) : totalCuentaFinal
-                        return (
-                          <td
-                            key={cuenta.nombreCompleto}
-                            className="px-3 py-3 text-right text-xs font-semibold whitespace-nowrap border-l"
-                            style={{ backgroundColor: COLORES_TABLA.fondoMonto, color: COLORES_TABLA.textoMonto, borderColor: COLORES_TABLA.bordeEncabezado }}
-                          >
-                            {valorMostrar > 0 ? `${simbolo} ${formatearMonto(valorMostrar)}` : '-'}
-                          </td>
-                        )
-                      })}
-                      {/* Columna de total por divisa */}
-                      <td
-                        className="px-3 py-3 text-right text-xs font-bold text-white whitespace-nowrap border-l"
-                        style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, borderColor: COLORES_TABLA.bordeEncabezado }}
-                      >
-                        {totalFinal > 0 ? `${simbolo} ${formatearMonto(mostrarEnUSD ? convertirAUSD(totalFinal, divisa) : totalFinal)}` : '-'}
-                      </td>
-                    </>
-                  )
-                })}
-                {/* Total general en USD */}
-                <td 
-                  className="px-4 py-3.5 text-right text-xs font-bold text-white sticky right-0 z-20 border-l shadow-[-2px_0_2px_rgba(0,0,0,0.05)] whitespace-nowrap"
-                  style={{ backgroundColor: COLORES_TABLA.fondoTotalUSD, borderColor: COLORES_TABLA.bordeEncabezado }}
-                >
-                  US$ {formatearMonto(
-                    agruparPorMes
-                      ? (datosProcesados.filter(d => d.esAgrupacion).slice(-1)[0]?.totalUSD || 0)
-                      : (datosProcesados.filter(d => !d.esAgrupacion).slice(-1)[0]?.totalUSD || 0)
-                  )}
-                </td>
-              </tr>
-            )}
             {/* Fila de porcentajes del total USD */}
-            {datosProcesados.length > 0 && (
-              <tr className="border-t" style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, borderColor: COLORES_TABLA.bordeTotal }}>
-                <td 
-                  className="px-4 py-2.5 text-xs font-semibold text-white sticky left-0 z-20 border-r shadow-[2px_0_2px_rgba(0,0,0,0.05)] whitespace-nowrap"
-                  style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, borderColor: COLORES_TABLA.bordeEncabezado }}
-                >
-                  % del Total USD
-                </td>
-                {DIVISAS.map((divisaInfo) => {
-                  const divisa = divisaInfo.codigo
-                  const expandida = divisasExpandidas[divisa] && !modoResumen
-                  
-                  // Calcular total acumulado de la divisa en USD
-                  const totalDivisaFinal = agruparPorMes
-                    ? (datosProcesados.filter(d => d.esAgrupacion).slice(-1)[0]?.totalesPorDivisa[divisa] || 0)
-                    : (datosProcesados.filter(d => !d.esAgrupacion).slice(-1)[0]?.totalesPorDivisa[divisa] || 0)
-                  
-                  const totalDivisaUSD = convertirAUSD(totalDivisaFinal, divisa)
-                  
-                  const totalGeneralUSD = agruparPorMes
-                    ? (datosProcesados.filter(d => d.esAgrupacion).slice(-1)[0]?.totalUSD || 0)
-                    : (datosProcesados.filter(d => !d.esAgrupacion).slice(-1)[0]?.totalUSD || 0)
-                  const porcentaje = totalGeneralUSD > 0 ? (totalDivisaUSD / totalGeneralUSD) * 100 : 0
+            {datosFiltrados.length > 0 && (() => {
+              // Obtener la última fecha (no agrupación)
+              const ultimaFecha = datosFiltrados.filter(d => !d.esAgrupacion).slice(-1)[0] || datosFiltrados.slice(-1)[0]
+              
+              // Usar el total USD de la última fecha
+              const totalGeneralUSD = ultimaFecha?.totalUSD || 0
+              
+              return (
+                <tr className="border-t" style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, borderColor: COLORES_TABLA.bordeTotal }}>
+                  <td 
+                    className="px-4 py-2.5 text-xs font-semibold sticky left-0 z-20 border-r shadow-[2px_0_2px_rgba(0,0,0,0.05)] whitespace-nowrap"
+                    style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
+                  >
+                    % del Total USD
+                  </td>
+                  {divisasAMostrar.map((divisaInfo) => {
+                    const divisa = divisaInfo.codigo
+                    const expandida = divisasExpandidas[divisa] && !modoResumen
+                    
+                    // Usar el valor de la última fecha
+                    const totalDivisaFinal = ultimaFecha?.totalesPorDivisa[divisa] || 0
+                    const totalDivisaUSD = convertirAUSD(totalDivisaFinal, divisa)
+                    const porcentaje = totalGeneralUSD > 0 ? (totalDivisaUSD / totalGeneralUSD) * 100 : 0
                   
                   if (!expandida) {
                     return (
                       <td
                         key={divisa}
-                        className="px-4 py-2.5 text-right text-xs font-medium text-white whitespace-nowrap border-l"
-                        style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, borderColor: COLORES_TABLA.bordeEncabezado }}
+                        className="px-4 py-2.5 text-right text-xs font-medium whitespace-nowrap border-l"
+                        style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
                       >
                         {porcentaje > 0 ? `${porcentaje.toFixed(2)}%` : '-'}
                       </td>
@@ -818,25 +817,24 @@ export default function TablaUnificada() {
                   return (
                     <>
                       {cuentasDivisa.map((cuenta) => {
-                        const totalCuentaFinal = agruparPorMes
-                          ? (datosProcesados.filter(d => d.esAgrupacion).slice(-1)[0]?.valores[cuenta.nombreCompleto] || 0)
-                          : (datosProcesados.filter(d => !d.esAgrupacion).slice(-1)[0]?.valores[cuenta.nombreCompleto] || 0)
+                        // Usar el valor de la última fecha para esta cuenta
+                        const totalCuentaFinal = ultimaFecha?.valores[cuenta.nombreCompleto] || 0
                         const totalCuentaUSD = convertirAUSD(totalCuentaFinal, divisa)
                         const porcentajeCuenta = totalGeneralUSD > 0 ? (totalCuentaUSD / totalGeneralUSD) * 100 : 0
                         return (
                           <td
                             key={cuenta.nombreCompleto}
                             className="px-3 py-2 text-right text-xs whitespace-nowrap border-l"
-                            style={{ backgroundColor: COLORES_TABLA.fondoMonto, color: COLORES_TABLA.textoMonto, borderColor: COLORES_TABLA.bordeEncabezado }}
+                            style={{ backgroundColor: COLORES_TABLA.fondoPorcentajeBancos, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
                           >
-                            {porcentajeCuenta > 0 ? `${porcentajeCuenta.toFixed(2)}%` : '-'}
+                            {porcentajeCuenta > 0 ? `${porcentajeCuenta.toFixed(2)}%` : '0.00%'}
                           </td>
                         )
                       })}
                       {/* Columna de porcentaje total por divisa */}
                       <td
-                        className="px-3 py-2 text-right text-xs font-semibold text-white whitespace-nowrap border-l"
-                        style={{ backgroundColor: COLORES_TABLA.fondoTotalDivisa, borderColor: COLORES_TABLA.bordeEncabezado }}
+                        className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap border-l"
+                        style={{ backgroundColor: COLORES_TABLA.fondoPorcentajeTotal, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
                       >
                         {porcentaje > 0 ? `${porcentaje.toFixed(2)}%` : '-'}
                       </td>
@@ -845,13 +843,14 @@ export default function TablaUnificada() {
                 })}
                 {/* Porcentaje total (siempre 100%) */}
                 <td 
-                  className="px-4 py-2.5 text-right text-xs font-bold text-white sticky right-0 z-20 border-l shadow-[-2px_0_2px_rgba(0,0,0,0.05)] whitespace-nowrap"
-                  style={{ backgroundColor: COLORES_TABLA.fondoTotalUSD, borderColor: COLORES_TABLA.bordeEncabezado }}
+                  className="px-4 py-2.5 text-right text-xs font-bold sticky right-0 z-20 border-l shadow-[-2px_0_2px_rgba(0,0,0,0.05)] whitespace-nowrap"
+                  style={{ backgroundColor: COLORES_TABLA.fondoTotalUSD, color: COLORES_TABLA.textoGeneral, borderColor: COLORES_TABLA.bordeEncabezado }}
                 >
-                  100.00%
+                  {totalGeneralUSD > 0 ? '100.00%' : '-'}
                 </td>
               </tr>
-            )}
+              )
+            })()}
           </tbody>
         </table>
       </div>
