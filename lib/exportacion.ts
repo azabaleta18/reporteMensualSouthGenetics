@@ -211,7 +211,7 @@ export function exportarExcel(opciones: OpcionesExportacion): void {
   if (datos.length > 0) {
     const ultimaFecha = datos.filter(d => !d.esAgrupacion).slice(-1)[0] || datos.slice(-1)[0]
     const totalGeneralUSD = ultimaFecha?.totalUSD || 0
-    const filaPorcentajes = ['% del Total USD']
+    const filaPorcentajes: any[] = ['% del Total USD']
     
     divisasParaExportar.forEach((divisaInfo) => {
       const divisa = divisaInfo.codigo
@@ -418,7 +418,7 @@ export function exportarPDF(opciones: OpcionesExportacion): void {
   // Generar cada página
   for (let pagina = 0; pagina < totalPaginas; pagina++) {
     if (pagina > 0) {
-      doc.addPage('landscape', 'a4')
+      doc.addPage()
     }
     
     // Calcular índices de columnas para esta página
