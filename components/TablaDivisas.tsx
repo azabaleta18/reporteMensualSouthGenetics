@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { DivisaConEstado, Divisa } from '@/lib/types'
+import { DivisaConEstado, Divisa, BANCOS_POR_DIVISA } from '@/lib/types'
 import { obtenerDivisasConEstado, actualizarEstadoDivisa, calcularTotalEnDolares } from '@/lib/divisas'
-import { Save, DollarSign } from 'lucide-react'
+import { obtenerRegistrosPorBancoYDivisa } from '@/lib/database'
+import { RegistroBancario } from '@/lib/types'
+import { Save, DollarSign, ChevronDown, ChevronUp } from 'lucide-react'
 
 export default function TablaDivisas() {
   const [divisas, setDivisas] = useState<DivisaConEstado[]>([])
@@ -11,6 +13,9 @@ export default function TablaDivisas() {
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState<Divisa | null>(null)
   const [totalDolares, setTotalDolares] = useState(0)
+  const [registrosPorDivisa, setRegistrosPorDivisa] = useState<Record<Divisa, Record<string, RegistroBancario[]>>>({} as Record<Divisa, Record<string, RegistroBancario[]>>)
+  const [dropdownsAbiertos, setDropdownsAbiertos] = useState<Record<Divisa, boolean>>({} as Record<Divisa, boolean>)
+  const [cargandoRegistros, setCargandoRegistros] = useState<Record<Divisa, boolean>>({} as Record<Divisa, boolean>)
 
   useEffect(() => {
     cargarDatos()
@@ -33,10 +38,42 @@ export default function TablaDivisas() {
         valoresIniciales[d.divisa] = d.cantidad.toString()
       })
       setValoresEditados(valoresIniciales)
+      // Inicializar dropdowns cerrados
+      const dropdownsIniciales = {} as Record<Divisa, boolean>
+      data.forEach(d => {
+        dropdownsIniciales[d.divisa] = false
+      })
+      setDropdownsAbiertos(dropdownsIniciales)
+      // Inicializar estado de carga de registros
+      const cargandoIniciales = {} as Record<Divisa, boolean>
+      data.forEach(d => {
+        cargandoIniciales[d.divisa] = false
+      })
+      setCargandoRegistros(cargandoIniciales)
     } catch (error) {
       console.error('Error al cargar datos:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const cargarRegistrosDivisa = async (divisa: Divisa) => {
+    // Si ya están cargados, no volver a cargar
+    if (registrosPorDivisa[divisa]) {
+      return
+    }
+
+    try {
+      setCargandoRegistros(prev => ({ ...prev, [divisa]: true }))
+      const registros = await obtenerRegistrosPorBancoYDivisa(divisa)
+      setRegistrosPorDivisa(prev => ({
+        ...prev,
+        [divisa]: registros
+      }))
+    } catch (error) {
+      console.error('Error al cargar registros:', error)
+    } finally {
+      setCargandoRegistros(prev => ({ ...prev, [divisa]: false }))
     }
   }
 
@@ -102,6 +139,19 @@ export default function TablaDivisas() {
     }
   }
 
+  const toggleDropdown = async (divisa: Divisa) => {
+    const nuevoEstado = !dropdownsAbiertos[divisa]
+    setDropdownsAbiertos(prev => ({
+      ...prev,
+      [divisa]: nuevoEstado
+    }))
+    
+    // Si se está abriendo y no hay registros cargados, cargarlos
+    if (nuevoEstado && !registrosPorDivisa[divisa]) {
+      await cargarRegistrosDivisa(divisa)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center p-8">
@@ -145,16 +195,80 @@ export default function TablaDivisas() {
                     key={divisa.divisa}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">
-                            {divisa.nombre}
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <div className="whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                              {divisa.nombre}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {divisa.divisa}
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {divisa.divisa}
-                          </div>
+                          {BANCOS_POR_DIVISA[divisa.divisa] && BANCOS_POR_DIVISA[divisa.divisa].length > 0 && (
+                            <button
+                              onClick={() => toggleDropdown(divisa.divisa)}
+                              className="ml-2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                              title="Ver bancos"
+                            >
+                              {dropdownsAbiertos[divisa.divisa] ? (
+                                <ChevronUp className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                              )}
+                            </button>
+                          )}
                         </div>
+                        {dropdownsAbiertos[divisa.divisa] && BANCOS_POR_DIVISA[divisa.divisa] && BANCOS_POR_DIVISA[divisa.divisa].length > 0 && (
+                          <div className="mt-2 ml-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600">
+                            {cargandoRegistros[divisa.divisa] ? (
+                              <div className="text-xs text-gray-500 dark:text-gray-400">Cargando registros...</div>
+                            ) : (
+                              <div className="space-y-3">
+                                {BANCOS_POR_DIVISA[divisa.divisa].map((banco) => {
+                                  const registrosBanco = registrosPorDivisa[divisa.divisa]?.[banco] || []
+                                  const totalBanco = registrosBanco.reduce((sum, r) => sum + r.cantidad, 0)
+                                  
+                                  return (
+                                    <div key={banco} className="border-b border-gray-200 dark:border-gray-600 last:border-b-0 pb-2 last:pb-0">
+                                      <div className="flex items-center justify-between mb-1">
+                                        <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                          {banco}
+                                        </div>
+                                        <div className="text-xs font-medium text-gray-900 dark:text-white">
+                                          Total: {formatearMonto(totalBanco, divisa.simbolo)}
+                                        </div>
+                                      </div>
+                                      {registrosBanco.length > 0 ? (
+                                        <div className="ml-2 space-y-1">
+                                          {registrosBanco.map((registro) => (
+                                            <div key={registro.id} className="text-xs text-gray-600 dark:text-gray-400 flex justify-between">
+                                              <span>
+                                                {new Date(registro.fecha).toLocaleDateString('es-ES', {
+                                                  year: 'numeric',
+                                                  month: 'short',
+                                                  day: 'numeric'
+                                                })}
+                                              </span>
+                                              <span className="ml-2">
+                                                {formatearMonto(registro.cantidad, divisa.simbolo)}
+                                              </span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <div className="text-xs text-gray-400 dark:text-gray-500 ml-2 italic">
+                                          Sin registros
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

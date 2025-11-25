@@ -1,21 +1,22 @@
 'use client'
 
-import TablaDivisas from '@/components/TablaDivisas'
+import TablaUnificada from '@/components/TablaUnificada'
+import { COLORES_TABLA } from '@/lib/colores'
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen py-8 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: COLORES_TABLA.fondoGeneral }}>
       <div className="max-w-7xl mx-auto space-y-8">
         <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-4xl font-bold mb-2" style={{ color: COLORES_TABLA.textoGeneral }}>
             SouthGenetics - Gestión Financiera
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p style={{ color: COLORES_TABLA.textoGeneral }}>
             Sistema de gestión de divisas y conversión a dólares
           </p>
         </header>
 
-        <TablaDivisas />
+        <TablaUnificada />
       </div>
     </main>
   )
