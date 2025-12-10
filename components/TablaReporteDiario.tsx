@@ -35,7 +35,7 @@ export default function TablaReporteDiario() {
       
       const tasasMap: Record<Divisa, number> = {} as Record<Divisa, number>
       tasas.forEach(t => {
-        tasasMap[t.divisa] = t.tasa_a_usd
+        tasasMap[t.codigo_divisa as Divisa] = t.unidades_por_usd
       })
       setTasasCambio(tasasMap)
     } catch (error) {
@@ -98,8 +98,14 @@ export default function TablaReporteDiario() {
       // Calcular total en USD
       let totalUSD = 0
       Object.entries(totalesPorDivisa).forEach(([divisa, cantidad]) => {
-        const tasa = tasasCambio[divisa as Divisa] || 1
-        totalUSD += cantidad * tasa
+        if (divisa === 'USD') {
+          totalUSD += cantidad
+        } else {
+          const unidadesPorUSD = tasasCambio[divisa as Divisa] || 1
+          if (unidadesPorUSD !== 0) {
+            totalUSD += cantidad / unidadesPorUSD
+          }
+        }
       })
 
       datos.push({

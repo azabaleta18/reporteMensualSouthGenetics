@@ -22,8 +22,15 @@ function obtenerSimboloDivisa(divisa: Divisa): string {
 }
 
 function convertirAUSD(cantidad: number, divisa: Divisa, tasasCambio: Record<Divisa, number>): number {
-  const tasa = tasasCambio[divisa] || 1
-  return cantidad * tasa
+  if (divisa === 'USD') {
+    return cantidad // USD ya está en USD
+  }
+  const unidadesPorUSD = tasasCambio[divisa] || 1
+  if (unidadesPorUSD === 0) {
+    console.warn(`⚠️ No se encontró tasa de cambio para ${divisa}, usando 1`)
+    return cantidad // Fallback: asumir 1:1
+  }
+  return cantidad / unidadesPorUSD
 }
 
 function formatearMonto(valor: number): string {

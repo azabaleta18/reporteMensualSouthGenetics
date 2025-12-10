@@ -101,7 +101,8 @@ export default function TablaDivisas() {
       setDivisas(prev => prev.map(d => {
         if (d.divisa === divisa) {
           const nuevaCantidad = valor
-          const nuevoTotalUsd = nuevaCantidad * d.tasa_a_usd
+          // tasa_a_usd contiene unidades_por_usd, por lo que debemos dividir
+          const nuevoTotalUsd = d.divisa === 'USD' ? nuevaCantidad : nuevaCantidad / d.tasa_a_usd
           return {
             ...d,
             cantidad: nuevaCantidad,

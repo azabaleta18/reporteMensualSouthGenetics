@@ -159,8 +159,15 @@ export default function TablaUnificada() {
   }
 
   const convertirAUSD = (cantidad: number, divisa: Divisa): number => {
-    const tasa = tasasCambio[divisa] || 1
-    return cantidad * tasa
+    if (divisa === 'USD') {
+      return cantidad // USD ya está en USD
+    }
+    const unidadesPorUSD = tasasCambio[divisa] || 1
+    if (unidadesPorUSD === 0) {
+      console.warn(`⚠️ No se encontró tasa de cambio para ${divisa}, usando 1`)
+      return cantidad // Fallback: asumir 1:1
+    }
+    return cantidad / unidadesPorUSD
   }
 
   function obtenerMesAnio(fecha: string) {
@@ -239,8 +246,14 @@ export default function TablaUnificada() {
         // Calcular total USD del mes
         let totalUSD = 0
         Object.entries(totalesPorDivisaMes).forEach(([divisa, cantidad]) => {
-          const tasa = tasasCambio[divisa as Divisa] || 1
-          totalUSD += cantidad * tasa
+          if (divisa === 'USD') {
+            totalUSD += cantidad
+          } else {
+            const unidadesPorUSD = tasasCambio[divisa as Divisa] || 1
+            if (unidadesPorUSD !== 0) {
+              totalUSD += cantidad / unidadesPorUSD
+            }
+          }
         })
 
         // Filtrar fechas del mes según los filtros antes de agregar la agrupación
@@ -329,8 +342,14 @@ export default function TablaUnificada() {
 
             let totalUSDDia = 0
             Object.entries(totalesHastaFecha).forEach(([divisa, cantidad]) => {
-              const tasa = tasasCambio[divisa as Divisa] || 1
-              totalUSDDia += cantidad * tasa
+              if (divisa === 'USD') {
+                totalUSDDia += cantidad
+              } else {
+                const unidadesPorUSD = tasasCambio[divisa as Divisa] || 1
+                if (unidadesPorUSD !== 0) {
+                  totalUSDDia += cantidad / unidadesPorUSD
+                }
+              }
             })
 
             datos.push({
@@ -371,8 +390,14 @@ export default function TablaUnificada() {
 
         let totalUSD = 0
         Object.entries(totalesPorDivisa).forEach(([divisa, cantidad]) => {
-          const tasa = tasasCambio[divisa as Divisa] || 1
-          totalUSD += cantidad * tasa
+          if (divisa === 'USD') {
+            totalUSD += cantidad
+          } else {
+            const unidadesPorUSD = tasasCambio[divisa as Divisa] || 1
+            if (unidadesPorUSD !== 0) {
+              totalUSD += cantidad / unidadesPorUSD
+            }
+          }
         })
 
         datos.push({
