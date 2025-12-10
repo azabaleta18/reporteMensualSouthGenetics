@@ -317,15 +317,13 @@ export default function TablaUnificadaReal() {
 
   const opcionesExportacion: OpcionesExportacion = {
     datos: datosProcesados,
-    divisas: divisasAMostrar.map(d => d.codigo),
     divisasAMostrar: divisasAMostrar.map(d => d.codigo),
-    cuentasPorDivisa: cuentasAMostrarPorDivisa,
     divisasExpandidas,
     divisasEnUSD,
     tasasCambio,
-    obtenerSimboloDivisa,
-    convertirAUSD,
-    modoResumen
+    modoResumen,
+    todoEnUSD: false,
+    agruparPorMes
   }
 
   if (loading) {
@@ -550,7 +548,7 @@ export default function TablaUnificadaReal() {
                       <td
                         className="border px-3 py-2 text-sm sticky left-0 z-10"
                         style={{
-                          backgroundColor: esAgrupacion ? COLORES_TABLA.fondoFilaAgrupada : (esFilaPar ? COLORES_TABLA.fondoFila : COLORES_TABLA.fondoFilaAlterna),
+                          backgroundColor: esAgrupacion ? COLORES_TABLA.fondoAgrupacion : COLORES_TABLA.fondoFila,
                           borderColor: COLORES_TABLA.bordeGeneral,
                           color: COLORES_TABLA.textoGeneral,
                           fontWeight: esAgrupacion ? 'bold' : 'normal',
@@ -587,7 +585,7 @@ export default function TablaUnificadaReal() {
                                   key={cuenta.id_cuenta}
                                   className="border px-2 py-2 text-sm text-right"
                                   style={{
-                                    backgroundColor: esAgrupacion ? COLORES_TABLA.fondoFilaAgrupada : (esFilaPar ? COLORES_TABLA.fondoFila : COLORES_TABLA.fondoFilaAlterna),
+                                    backgroundColor: esAgrupacion ? COLORES_TABLA.fondoAgrupacion : COLORES_TABLA.fondoFila,
                                     borderColor: COLORES_TABLA.bordeGeneral,
                                     color: COLORES_TABLA.textoMonto,
                                   }}
@@ -603,7 +601,7 @@ export default function TablaUnificadaReal() {
                             <td
                               className="border px-2 py-2 text-sm text-right font-semibold"
                               style={{
-                                backgroundColor: esAgrupacion ? COLORES_TABLA.fondoFilaAgrupada : COLORES_TABLA.fondoMonto,
+                                backgroundColor: esAgrupacion ? COLORES_TABLA.fondoAgrupacion : COLORES_TABLA.fondoMonto,
                                 borderColor: COLORES_TABLA.bordeGeneral,
                                 color: COLORES_TABLA.textoMonto,
                               }}
@@ -617,7 +615,7 @@ export default function TablaUnificadaReal() {
                             <td
                               className="border px-2 py-2 text-sm text-right"
                               style={{
-                                backgroundColor: esAgrupacion ? COLORES_TABLA.fondoFilaAgrupada : (esFilaPar ? COLORES_TABLA.fondoFila : COLORES_TABLA.fondoFilaAlterna),
+                                backgroundColor: esAgrupacion ? COLORES_TABLA.fondoAgrupacion : COLORES_TABLA.fondoFila,
                                 borderColor: COLORES_TABLA.bordeGeneral,
                                 color: COLORES_TABLA.textoMonto,
                               }}
@@ -634,7 +632,7 @@ export default function TablaUnificadaReal() {
                       <td
                         className="border px-3 py-2 text-sm text-right font-bold"
                         style={{
-                          backgroundColor: esAgrupacion ? COLORES_TABLA.fondoFilaAgrupada : COLORES_TABLA.fondoTotalUSD,
+                          backgroundColor: esAgrupacion ? COLORES_TABLA.fondoAgrupacion : COLORES_TABLA.fondoTotalUSD,
                           borderColor: COLORES_TABLA.bordeGeneral,
                           color: COLORES_TABLA.textoGeneral,
                         }}
