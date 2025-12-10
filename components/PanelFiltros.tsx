@@ -85,7 +85,9 @@ export default function PanelFiltros({ filtros, onFiltrosChange }: PanelFiltrosP
                 style={{
                   backgroundColor: COLORES_TABLA.fondoMonto,
                   borderColor: COLORES_TABLA.bordeEncabezado,
-                  color: COLORES_TABLA.textoGeneral,
+                  color: '#111827',
+                  WebkitTextFillColor: '#111827',
+                  opacity: 1,
                 }}
               />
             </div>
@@ -104,7 +106,9 @@ export default function PanelFiltros({ filtros, onFiltrosChange }: PanelFiltrosP
                 style={{
                   backgroundColor: COLORES_TABLA.fondoMonto,
                   borderColor: COLORES_TABLA.bordeEncabezado,
-                  color: COLORES_TABLA.textoGeneral,
+                  color: '#111827',
+                  WebkitTextFillColor: '#111827',
+                  opacity: 1,
                 }}
               />
             </div>

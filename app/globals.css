@@ -24,5 +24,31 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+  
+  /* Color personalizado para filas no actuales */
+  .bg-gray-150 {
+    background-color: #e8ebed;
+  }
+}
+
+/* Estilos para inputs de fecha - forzar color de texto opaco */
+input[type="date"] {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+  opacity: 1 !important;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+  opacity: 1 !important;
 }
 

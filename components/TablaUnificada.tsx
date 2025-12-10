@@ -1,19 +1,20 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { RegistroBancario, Divisa, BANCOS_POR_DIVISA, DIVISAS, CUENTAS_ORDENADAS } from '@/lib/types'
-import { obtenerRegistrosAgrupadosPorFecha, obtenerRegistrosPorBancoYDivisa, crearRegistrosEjemplo } from '@/lib/database'
+import { Divisa, DIVISAS } from '@/lib/types'
 import { obtenerTasasCambio } from '@/lib/divisas'
+import { obtenerDatosReporte, CuentaCompleta } from '@/lib/database-real'
 import { ChevronRight, ChevronDown, Database, DollarSign, Eye, EyeOff, Calendar, Globe } from 'lucide-react'
 import { COLORES_TABLA } from '@/lib/colores'
 import PanelFiltros from './PanelFiltros'
 import BotonExportar from './BotonExportar'
+import EditorTasasCambio from './EditorTasasCambio'
 import { FiltrosReporte, FILTROS_INICIALES, aplicarFiltros } from '@/lib/filtros'
 import { OpcionesExportacion } from '@/lib/exportacion'
 
 export interface DatosPorFecha {
   fecha: string
-  valores: Record<string, number> // clave: nombreCompleto de cuenta o divisa, valor: cantidad acumulada
+  valores: Record<string, number> // clave: id_cuenta (como string) o "divisa_{DIVISA}", valor: saldo
   totalesPorDivisa: Record<Divisa, number>
   totalUSD: number
   esAgrupacion?: boolean // true si es una fila de agrupación por mes
@@ -22,7 +23,15 @@ export interface DatosPorFecha {
 }
 
 export default function TablaUnificada() {
-  const [registrosPorFecha, setRegistrosPorFecha] = useState<Record<string, RegistroBancario[]>>({})
+  const [saldosPorFecha, setSaldosPorFecha] = useState<Record<string, Array<{
+    id_cuenta: number
+    nombre_cuenta: string
+    banco: string
+    divisa: Divisa
+    saldo_divisa: number
+    saldo_usd: number
+  }>>>({})
+  const [cuentas, setCuentas] = useState<CuentaCompleta[]>([])
   const [tasasCambio, setTasasCambio] = useState<Record<Divisa, number>>({} as Record<Divisa, number>)
   const [loading, setLoading] = useState(true)
   const [divisasExpandidas, setDivisasExpandidas] = useState<Record<Divisa, boolean>>({
@@ -31,8 +40,6 @@ export default function TablaUnificada() {
   const [divisasEnUSD, setDivisasEnUSD] = useState<Record<Divisa, boolean>>({
     ARS: false, CLP: false, COP: false, EUR: false, MXN: false, UYU: false, USD: false
   })
-  const [registrosPorDivisa, setRegistrosPorDivisa] = useState<Record<Divisa, Record<string, RegistroBancario[]>>>({} as Record<Divisa, Record<string, RegistroBancario[]>>)
-  const [generandoEjemplos, setGenerandoEjemplos] = useState(false)
   const [modoResumen, setModoResumen] = useState(false)
   const [agruparPorMes, setAgruparPorMes] = useState(true)
   const [mesesExpandidos, setMesesExpandidos] = useState<Record<string, boolean>>({})
@@ -46,20 +53,26 @@ export default function TablaUnificada() {
   const cargarDatos = async () => {
     try {
       setLoading(true)
-      const [registros, tasas] = await Promise.all([
-        obtenerRegistrosAgrupadosPorFecha(),
+      const [datosReporte, tasas] = await Promise.all([
+        obtenerDatosReporte(
+          filtros.fechaDesde || undefined,
+          filtros.fechaHasta || undefined,
+          filtros.divisas.length > 0 ? filtros.divisas : undefined
+        ),
         obtenerTasasCambio(),
       ])
       
-      setRegistrosPorFecha(registros)
+      setSaldosPorFecha(datosReporte.saldosPorFecha)
+      setCuentas(datosReporte.cuentas)
       
       const tasasMap: Record<Divisa, number> = {} as Record<Divisa, number>
       tasas.forEach(t => {
-        tasasMap[t.divisa] = t.tasa_a_usd
+        tasasMap[t.codigo_divisa as Divisa] = t.unidades_por_usd
       })
       setTasasCambio(tasasMap)
     } catch (error) {
       console.error('Error al cargar datos:', error)
+      // No lanzar el error, solo registrarlo para que la UI no se rompa
     } finally {
       setLoading(false)
     }
@@ -444,6 +457,9 @@ export default function TablaUnificada() {
           <BotonExportar opciones={opcionesExportacion} />
         </div>
         <PanelFiltros filtros={filtros} onFiltrosChange={setFiltros} />
+        <EditorTasasCambio onTasasActualizadas={(nuevasTasas) => {
+          setTasasCambio(nuevasTasas)
+        }} />
         <div className="flex items-center gap-3 flex-wrap mt-4">
           <button
             onClick={() => setAgruparPorMes(!agruparPorMes)}

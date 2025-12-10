@@ -15,10 +15,9 @@ export interface EstadoDivisa {
 }
 
 export interface TasaCambio {
-  id: string
-  divisa: Divisa
-  tasa_a_usd: number
-  updated_at: string
+  codigo_divisa: string
+  unidades_por_usd: number
+  fecha_actualizacion: string
 }
 
 export interface DivisaConEstado {

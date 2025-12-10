@@ -3,6 +3,11 @@ import { EstadoDivisa, TasaCambio, Divisa, DivisaConEstado } from './types'
 import { DIVISAS } from './types'
 
 export async function obtenerEstadosDivisas(): Promise<EstadoDivisa[]> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.error('Variables de entorno de Supabase no configuradas')
+    return []
+  }
+
   const { data, error } = await supabase
     .from('estado_divisa')
     .select('*')
@@ -36,9 +41,15 @@ export async function actualizarEstadoDivisa(divisa: Divisa, cantidad: number): 
 }
 
 export async function obtenerTasasCambio(): Promise<TasaCambio[]> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.error('Variables de entorno de Supabase no configuradas')
+    return []
+  }
+
   const { data, error } = await supabase
     .from('tasa_cambio')
-    .select('*')
+    .select('codigo_divisa, unidades_por_usd, fecha_actualizacion')
+    .order('codigo_divisa', { ascending: true })
 
   if (error) {
     console.error('Error al obtener tasas de cambio:', error)
@@ -48,15 +59,15 @@ export async function obtenerTasasCambio(): Promise<TasaCambio[]> {
   return data || []
 }
 
-export async function actualizarTasaCambio(divisa: Divisa, tasa_a_usd: number): Promise<TasaCambio> {
+export async function actualizarTasaCambio(divisa: Divisa, unidades_por_usd: number): Promise<TasaCambio> {
   const { data, error } = await supabase
     .from('tasa_cambio')
     .update({ 
-      tasa_a_usd,
-      updated_at: new Date().toISOString()
+      unidades_por_usd,
+      fecha_actualizacion: new Date().toISOString()
     })
-    .eq('divisa', divisa)
-    .select()
+    .eq('codigo_divisa', divisa)
+    .select('codigo_divisa, unidades_por_usd, fecha_actualizacion')
     .single()
 
   if (error) {
@@ -73,13 +84,13 @@ export async function obtenerDivisasConEstado(): Promise<DivisaConEstado[]> {
     obtenerTasasCambio(),
   ])
 
-  const tasasMap = new Map(tasas.map(t => [t.divisa, t.tasa_a_usd]))
+  const tasasMap = new Map(tasas.map(t => [t.codigo_divisa, t.unidades_por_usd]))
   const estadosMap = new Map(estados.map(e => [e.divisa, e.cantidad]))
 
   return DIVISAS.map(divisaInfo => {
     const cantidad = estadosMap.get(divisaInfo.codigo) || 0
     const tasa = tasasMap.get(divisaInfo.codigo) || 1
-    const total_usd = cantidad * tasa
+    const total_usd = cantidad / tasa // Dividir porque es unidades_por_usd, no tasa_a_usd
 
     return {
       divisa: divisaInfo.codigo,

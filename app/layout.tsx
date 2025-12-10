@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import SessionMonitor from '@/components/SessionMonitor'
 
 export const metadata: Metadata = {
   title: 'SouthGenetics - Gestión Financiera',
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body>
+        <SessionMonitor />
+        {children}
+      </body>
     </html>
   )
 }

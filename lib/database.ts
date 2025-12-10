@@ -102,6 +102,11 @@ export async function obtenerTotalGeneral(): Promise<number> {
 }
 
 export async function obtenerRegistrosPorBancoYDivisa(divisa: Divisa): Promise<Record<string, RegistroBancario[]>> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.error('Variables de entorno de Supabase no configuradas')
+    return {}
+  }
+
   const { data, error } = await supabase
     .from('registro_bancario')
     .select('*')
@@ -126,6 +131,11 @@ export async function obtenerRegistrosPorBancoYDivisa(divisa: Divisa): Promise<R
 }
 
 export async function obtenerRegistrosAgrupadosPorFecha(): Promise<Record<string, RegistroBancario[]>> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.error('Variables de entorno de Supabase no configuradas')
+    return {}
+  }
+
   const { data, error } = await supabase
     .from('registro_bancario')
     .select('*')

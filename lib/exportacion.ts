@@ -518,8 +518,8 @@ export function exportarPDF(opciones: OpcionesExportacion): void {
       body: filasPagina,
       startY: margenSuperior,
       styles: {
-        fontSize: 7,
-        cellPadding: 2,
+        fontSize: factorEscala < 0.8 ? 6 : factorEscala < 0.9 ? 7 : 8,
+        cellPadding: factorEscala < 0.8 ? 1 : 2,
         overflow: 'linebreak' as const,
         cellWidth: 'wrap' as const,
         halign: 'left' as const,

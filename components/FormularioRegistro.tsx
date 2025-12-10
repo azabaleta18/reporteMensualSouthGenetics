@@ -127,7 +127,8 @@ export default function FormularioRegistro({ onRegistroCreado }: FormularioRegis
             id="fecha"
             value={fecha}
             onChange={(e) => setFecha(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-gray-900"
+            style={{ color: '#111827', opacity: 1 }}
             required
           />
         </div>

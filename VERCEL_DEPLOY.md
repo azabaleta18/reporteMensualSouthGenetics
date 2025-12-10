@@ -106,3 +106,4 @@ Para deployments de preview, cada pull request generará una URL de preview úni
 - ✅ Vercel usa Node.js 18.x por defecto, que es compatible con Next.js 14
 - ✅ El proyecto está configurado para funcionar tanto en desarrollo como en producción
 
+

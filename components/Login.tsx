@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { COLORES_TABLA } from '@/lib/colores'
 import { LogIn, Mail, Lock, Loader2 } from 'lucide-react'
-import { getSession } from '@/lib/auth'
+import { getSession, signIn } from '@/lib/auth'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -33,10 +33,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      const { data, error: signInError } = await signIn(email, password)
 
       if (signInError) {
         setError(signInError.message)
@@ -48,8 +45,8 @@ export default function Login() {
         router.push('/')
         router.refresh()
       }
-    } catch (err) {
-      setError('Error al iniciar sesión. Por favor, intenta nuevamente.')
+    } catch (err: any) {
+      setError(err?.message || 'Error al iniciar sesión. Por favor, intenta nuevamente.')
       setLoading(false)
     }
   }
