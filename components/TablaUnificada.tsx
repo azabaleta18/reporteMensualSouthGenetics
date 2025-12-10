@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { Divisa, DIVISAS } from '@/lib/types'
+import { Divisa, DIVISAS, CUENTAS_ORDENADAS, BANCOS_POR_DIVISA } from '@/lib/types'
 import { obtenerTasasCambio } from '@/lib/divisas'
 import { obtenerDatosReporte, CuentaCompleta } from '@/lib/database-real'
+import { crearRegistrosEjemplo, obtenerRegistrosPorBancoYDivisa } from '@/lib/database'
 import { ChevronRight, ChevronDown, Database, DollarSign, Eye, EyeOff, Calendar, Globe } from 'lucide-react'
 import { COLORES_TABLA } from '@/lib/colores'
 import PanelFiltros from './PanelFiltros'
@@ -45,6 +46,8 @@ export default function TablaUnificada() {
   const [mesesExpandidos, setMesesExpandidos] = useState<Record<string, boolean>>({})
   const [todoEnUSD, setTodoEnUSD] = useState(false)
   const [filtros, setFiltros] = useState<FiltrosReporte>(FILTROS_INICIALES)
+  const [generandoEjemplos, setGenerandoEjemplos] = useState(false)
+  const [registrosPorDivisa, setRegistrosPorDivisa] = useState<Record<Divisa, any[]>>({} as Record<Divisa, any[]>)
 
   useEffect(() => {
     cargarDatos()
@@ -189,7 +192,9 @@ export default function TablaUnificada() {
   }
 
   const datosProcesados = useMemo(() => {
-    const fechas = Object.keys(registrosPorFecha).sort()
+    // TODO: Este código está obsoleto y usa registrosPorFecha que no existe
+    // Necesita ser reescrito para usar saldosPorFecha
+    const fechas = Object.keys(saldosPorFecha).sort()
     const datos: DatosPorFecha[] = []
     const valoresAcumulados: Record<string, number> = {}
     const totalesPorDivisaAcumulados: Record<Divisa, number> = {
@@ -220,26 +225,21 @@ export default function TablaUnificada() {
         // Procesar todas las fechas hasta el último día del mes (incluyendo meses anteriores)
         const ultimaFechaDelMes = fechasDelMes[fechasDelMes.length - 1]
         fechas.filter(f => f <= ultimaFechaDelMes).forEach((fecha) => {
-          const registros = registrosPorFecha[fecha]
+          const saldos = saldosPorFecha[fecha] || []
           
-          registros.forEach((registro) => {
-            const cuentasCoincidentes = CUENTAS_ORDENADAS.filter(
-              c => c.banco === registro.banco && c.divisa === registro.divisa
-            )
-
-            if (cuentasCoincidentes.length > 0) {
-              const cuenta = cuentasCoincidentes[0]
-              
-              if (!valoresAcumulados[cuenta.nombreCompleto]) {
-                valoresAcumulados[cuenta.nombreCompleto] = 0
-              }
-              
-              valoresAcumulados[cuenta.nombreCompleto] += registro.cantidad
-              valoresMes[cuenta.nombreCompleto] = valoresAcumulados[cuenta.nombreCompleto]
-              
-              totalesPorDivisaAcumulados[registro.divisa] += registro.cantidad
-              totalesPorDivisaMes[registro.divisa] = totalesPorDivisaAcumulados[registro.divisa]
+          saldos.forEach((saldo) => {
+            // Usar saldo_divisa directamente desde saldosPorFecha
+            const cuentaKey = saldo.id_cuenta.toString()
+            
+            if (!valoresAcumulados[cuentaKey]) {
+              valoresAcumulados[cuentaKey] = 0
             }
+            
+            valoresAcumulados[cuentaKey] += saldo.saldo_divisa
+            valoresMes[cuentaKey] = valoresAcumulados[cuentaKey]
+            
+            totalesPorDivisaAcumulados[saldo.divisa] += saldo.saldo_divisa
+            totalesPorDivisaMes[saldo.divisa] = totalesPorDivisaAcumulados[saldo.divisa]
           })
         })
 
@@ -297,22 +297,16 @@ export default function TablaUnificada() {
           }
 
           fechasFiltradas.forEach((fecha) => {
-            const registros = registrosPorFecha[fecha]
+            const saldos = saldosPorFecha[fecha] || []
             
-            registros.forEach((registro) => {
-              const cuentasCoincidentes = CUENTAS_ORDENADAS.filter(
-                c => c.banco === registro.banco && c.divisa === registro.divisa
-              )
+            saldos.forEach((saldo) => {
+              const cuentaKey = saldo.id_cuenta.toString()
               
-              if (cuentasCoincidentes.length > 0) {
-                const cuenta = cuentasCoincidentes[0]
-                
-                if (!valoresAcumuladosParaFechas[cuenta.nombreCompleto]) {
-                  valoresAcumuladosParaFechas[cuenta.nombreCompleto] = 0
-                }
-                valoresAcumuladosParaFechas[cuenta.nombreCompleto] += registro.cantidad
-                totalesPorDivisaParaFechas[registro.divisa] += registro.cantidad
+              if (!valoresAcumuladosParaFechas[cuentaKey]) {
+                valoresAcumuladosParaFechas[cuentaKey] = 0
               }
+              valoresAcumuladosParaFechas[cuentaKey] += saldo.saldo_divisa
+              totalesPorDivisaParaFechas[saldo.divisa] += saldo.saldo_divisa
             })
 
             // Calcular acumulados hasta esta fecha (incluyendo todas las fechas anteriores, pero solo las que están en el rango o antes)
@@ -324,19 +318,14 @@ export default function TablaUnificada() {
             // Incluir todas las fechas hasta esta fecha, pero respetar el filtro fechaDesde
             const fechaLimiteInferior = filtros.fechaDesde || '0000-01-01'
             fechas.filter(f => f <= fecha && f >= fechaLimiteInferior).forEach((f) => {
-              const regs = registrosPorFecha[f]
-              regs.forEach((registro) => {
-                const cuentasCoincidentes = CUENTAS_ORDENADAS.filter(
-                  c => c.banco === registro.banco && c.divisa === registro.divisa
-                )
-                if (cuentasCoincidentes.length > 0) {
-                  const cuenta = cuentasCoincidentes[0]
-                  if (!valoresHastaFecha[cuenta.nombreCompleto]) {
-                    valoresHastaFecha[cuenta.nombreCompleto] = 0
-                  }
-                  valoresHastaFecha[cuenta.nombreCompleto] += registro.cantidad
-                  totalesHastaFecha[registro.divisa] += registro.cantidad
+              const saldos = saldosPorFecha[f] || []
+              saldos.forEach((saldo) => {
+                const cuentaKey = saldo.id_cuenta.toString()
+                if (!valoresHastaFecha[cuentaKey]) {
+                  valoresHastaFecha[cuentaKey] = 0
                 }
+                valoresHastaFecha[cuentaKey] += saldo.saldo_divisa
+                totalesHastaFecha[saldo.divisa] += saldo.saldo_divisa
               })
             })
 
@@ -364,28 +353,22 @@ export default function TablaUnificada() {
     } else {
       // Procesamiento normal sin agrupación
       fechas.forEach((fecha) => {
-        const registros = registrosPorFecha[fecha]
+        const saldos = saldosPorFecha[fecha] || []
         
         const valoresDia: Record<string, number> = { ...valoresAcumulados }
         const totalesPorDivisa: Record<Divisa, number> = { ...totalesPorDivisaAcumulados }
 
-        registros.forEach((registro) => {
-          const cuentasCoincidentes = CUENTAS_ORDENADAS.filter(
-            c => c.banco === registro.banco && c.divisa === registro.divisa
-          )
-
-          if (cuentasCoincidentes.length > 0) {
-            const cuenta = cuentasCoincidentes[0]
-            
-            if (!valoresAcumulados[cuenta.nombreCompleto]) {
-              valoresAcumulados[cuenta.nombreCompleto] = 0
-            }
-            valoresAcumulados[cuenta.nombreCompleto] += registro.cantidad
-            valoresDia[cuenta.nombreCompleto] = valoresAcumulados[cuenta.nombreCompleto]
-
-            totalesPorDivisaAcumulados[registro.divisa] += registro.cantidad
-            totalesPorDivisa[registro.divisa] = totalesPorDivisaAcumulados[registro.divisa]
+        saldos.forEach((saldo) => {
+          const cuentaKey = saldo.id_cuenta.toString()
+          
+          if (!valoresAcumulados[cuentaKey]) {
+            valoresAcumulados[cuentaKey] = 0
           }
+          valoresAcumulados[cuentaKey] += saldo.saldo_divisa
+          valoresDia[cuentaKey] = valoresAcumulados[cuentaKey]
+
+          totalesPorDivisaAcumulados[saldo.divisa] += saldo.saldo_divisa
+          totalesPorDivisa[saldo.divisa] = totalesPorDivisaAcumulados[saldo.divisa]
         })
 
         let totalUSD = 0
@@ -410,7 +393,7 @@ export default function TablaUnificada() {
     }
 
     return datos
-  }, [registrosPorFecha, tasasCambio, agruparPorMes, mesesExpandidos, filtros])
+  }, [saldosPorFecha, tasasCambio, agruparPorMes, mesesExpandidos, filtros])
 
   // Aplicar filtros a los datos procesados
   const datosFiltrados = useMemo(() => {

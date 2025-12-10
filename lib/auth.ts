@@ -68,18 +68,14 @@ export async function getSession(): Promise<{ user: User | null; session: any }>
 /**
  * Inicia sesión y guarda el timestamp de actividad
  */
-export async function signIn(email: string, password: string) {
+export async function signIn(email: string, password: string): Promise<{ data: any; error: any }> {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   })
 
-  if (error) {
-    throw error
-  }
-
   // Guardar timestamp de actividad al iniciar sesión
-  if (data.user) {
+  if (data?.user && !error) {
     updateLastActivity()
   }
 

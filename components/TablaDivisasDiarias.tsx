@@ -2177,7 +2177,8 @@ export default function TablaDivisasDiarias() {
                         // Calcular porcentaje de este banco específico
                         const totalUSDBanco = datosPorFecha.reduce((sum, datoFecha) => {
                           const divisaData = datoFecha.divisas.get(divisa.codigo)
-                          const bancoData = divisaData?.bancos.find(b => b.codigo_banco === banco.codigo)
+                          if (!divisaData) return sum
+                          const bancoData = divisaData.bancos.find(b => b.codigo_banco === banco.codigo)
                           if (bancoData) {
                             const key = `${datoFecha.fecha}|${divisa.codigo}`
                             const usdDivisa = datosUSDPorDivisaFecha.get(key) || 0
