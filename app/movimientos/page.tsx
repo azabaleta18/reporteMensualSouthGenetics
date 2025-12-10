@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react'
@@ -23,7 +23,7 @@ interface Movimiento {
   decimales_divisa: number
 }
 
-export default function MovimientosPage() {
+function MovimientosContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   
@@ -490,6 +490,25 @@ export default function MovimientosPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+export default function MovimientosPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gray-50 py-8 px-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+              <p className="text-gray-600">Cargando...</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    }>
+      <MovimientosContent />
+    </Suspense>
   )
 }
 
