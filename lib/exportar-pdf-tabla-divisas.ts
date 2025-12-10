@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { formatearMoneda, construirCodigoBanco } from './formato-moneda'
+import { TotalBancoDia, SaldoDiarioCuenta } from './tipos-divisas-diarias'
 
 interface DatosPorMes {
   mes: string
@@ -114,8 +115,8 @@ export function exportarTablaDivisasAPDF(
         
         // Calcular total USD del día
         const totalUSDDia = datos
-          .filter(d => d.fecha === datoFecha.fecha)
-          .reduce((sum, d) => {
+          .filter((d: SaldoDiarioCuenta) => d.fecha === datoFecha.fecha)
+          .reduce((sum: number, d: SaldoDiarioCuenta) => {
             const cuenta = d.cuenta as any
             const codigoDivisa = cuenta?.banco_pais_divisa?.divisa?.codigo_divisa || 'USD'
             return sum + calcularSaldoUSD(d.saldo_divisa, codigoDivisa)
@@ -130,13 +131,13 @@ export function exportarTablaDivisasAPDF(
           if (isExpanded && bancos.length > 0) {
             // Agregar valores por banco
             bancos.forEach(banco => {
-              const bancoData = divisaData?.bancos.find(b => b.codigo_banco === banco.codigo)
+              const bancoData = divisaData?.bancos.find((b: TotalBancoDia) => b.codigo_banco === banco.codigo)
               const valor = bancoData?.total || 0
               
               // Calcular valor en USD para este banco en este día
               const saldosBancoDia = datos
-                .filter(d => d.fecha === datoFecha.fecha)
-                .filter(d => {
+                .filter((d: SaldoDiarioCuenta) => d.fecha === datoFecha.fecha)
+                .filter((d: SaldoDiarioCuenta) => {
                   const cuenta = d.cuenta as any
                   const bancoPaisDivisa = cuenta?.banco_pais_divisa
                   const divisaBanco = bancoPaisDivisa?.divisa?.codigo_divisa
@@ -158,7 +159,7 @@ export function exportarTablaDivisasAPDF(
                   return divisaBanco === divisa.codigo && codigoBancoActual === banco.codigo
                 })
               
-              const valorEnUSD = saldosBancoDia.reduce((sum, d) => sum + calcularSaldoUSD(d.saldo_divisa, divisa.codigo), 0)
+              const valorEnUSD = saldosBancoDia.reduce((sum: number, d: SaldoDiarioCuenta) => sum + calcularSaldoUSD(d.saldo_divisa, divisa.codigo), 0)
               const valorMostrar = enUSD ? valorEnUSD : valor
               
               fila.push(valorMostrar > 0 ? formatearMoneda(valorMostrar, enUSD ? 'US$' : divisa.simbolo, divisa.decimales) : '-')
@@ -203,8 +204,8 @@ export function exportarTablaDivisasAPDF(
       // Calcular total USD del mes (último día)
       const ultimoDia = datoMes.diasDelMes[datoMes.diasDelMes.length - 1]
       const totalUSDMes = ultimoDia ? datos
-        .filter(d => d.fecha === ultimoDia.fecha)
-        .reduce((sum, d) => {
+        .filter((d: SaldoDiarioCuenta) => d.fecha === ultimoDia.fecha)
+        .reduce((sum: number, d: SaldoDiarioCuenta) => {
           const cuenta = d.cuenta as any
           const codigoDivisa = cuenta?.banco_pais_divisa?.divisa?.codigo_divisa || 'USD'
           return sum + calcularSaldoUSD(d.saldo_divisa, codigoDivisa)
@@ -219,14 +220,14 @@ export function exportarTablaDivisasAPDF(
         if (isExpanded && bancos.length > 0) {
           // Agregar valores por banco del mes
           bancos.forEach(banco => {
-            const bancoData = divisaData?.bancos.find(b => b.codigo_banco === banco.codigo)
+            const bancoData = divisaData?.bancos.find((b: TotalBancoDia) => b.codigo_banco === banco.codigo)
             const valor = bancoData?.total || 0
             
             // Calcular valor en USD para este banco en el último día del mes
             const ultimoDia = datoMes.diasDelMes[datoMes.diasDelMes.length - 1]
             const saldosBancoMes = ultimoDia ? datos
-              .filter(d => d.fecha === ultimoDia.fecha)
-              .filter(d => {
+              .filter((d: SaldoDiarioCuenta) => d.fecha === ultimoDia.fecha)
+              .filter((d: SaldoDiarioCuenta) => {
                 const cuenta = d.cuenta as any
                 const bancoPaisDivisa = cuenta?.banco_pais_divisa
                 const divisaBanco = bancoPaisDivisa?.divisa?.codigo_divisa
@@ -248,7 +249,7 @@ export function exportarTablaDivisasAPDF(
                 return divisaBanco === divisa.codigo && codigoBancoActual === banco.codigo
               }) : []
             
-            const valorEnUSD = saldosBancoMes.reduce((sum, d) => sum + calcularSaldoUSD(d.saldo_divisa, divisa.codigo), 0)
+            const valorEnUSD = saldosBancoMes.reduce((sum: number, d: SaldoDiarioCuenta) => sum + calcularSaldoUSD(d.saldo_divisa, divisa.codigo), 0)
             const valorMostrar = enUSD ? valorEnUSD : valor
             
             fila.push(valorMostrar > 0 ? formatearMoneda(valorMostrar, enUSD ? 'US$' : divisa.simbolo, divisa.decimales) : '-')
@@ -258,12 +259,12 @@ export function exportarTablaDivisasAPDF(
           const totalDivisaMes = divisaData?.total || 0
           const ultimoDia = datoMes.diasDelMes[datoMes.diasDelMes.length - 1]
           const totalUSDDivisaMes = ultimoDia ? datos
-            .filter(d => d.fecha === ultimoDia.fecha)
-            .filter(d => {
+            .filter((d: SaldoDiarioCuenta) => d.fecha === ultimoDia.fecha)
+            .filter((d: SaldoDiarioCuenta) => {
               const cuenta = d.cuenta as any
               return cuenta?.banco_pais_divisa?.codigo_divisa === divisa.codigo
             })
-            .reduce((s, d) => s + calcularSaldoUSD(d.saldo_divisa, divisa.codigo), 0) : 0
+            .reduce((s: number, d: SaldoDiarioCuenta) => s + calcularSaldoUSD(d.saldo_divisa, divisa.codigo), 0) : 0
           
           const totalMostrar = enUSD ? totalUSDDivisaMes : totalDivisaMes
           fila.push(totalMostrar > 0 ? formatearMoneda(totalMostrar, enUSD ? 'US$' : divisa.simbolo, divisa.decimales) : '-')
@@ -272,12 +273,12 @@ export function exportarTablaDivisasAPDF(
           const totalDivisaMes = divisaData?.total || 0
           const ultimoDia = datoMes.diasDelMes[datoMes.diasDelMes.length - 1]
           const totalUSDDivisaMes = ultimoDia ? datos
-            .filter(d => d.fecha === ultimoDia.fecha)
-            .filter(d => {
+            .filter((d: SaldoDiarioCuenta) => d.fecha === ultimoDia.fecha)
+            .filter((d: SaldoDiarioCuenta) => {
               const cuenta = d.cuenta as any
               return cuenta?.banco_pais_divisa?.codigo_divisa === divisa.codigo
             })
-            .reduce((s, d) => s + calcularSaldoUSD(d.saldo_divisa, divisa.codigo), 0) : 0
+            .reduce((s: number, d: SaldoDiarioCuenta) => s + calcularSaldoUSD(d.saldo_divisa, divisa.codigo), 0) : 0
           
           const totalMostrar = enUSD ? totalUSDDivisaMes : totalDivisaMes
           fila.push(totalMostrar > 0 ? formatearMoneda(totalMostrar, enUSD ? 'US$' : divisa.simbolo, divisa.decimales) : '-')
