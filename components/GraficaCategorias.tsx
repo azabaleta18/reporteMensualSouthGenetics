@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 import { Calendar } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { formatearMoneda } from '@/lib/formato-moneda'
 
 interface Movimiento {
   categoria_nombre: string
@@ -13,17 +15,89 @@ interface GraficaCategoriasProps {
   movimientos: Movimiento[]
 }
 
+interface DatosCategoriaUSD {
+  categoria: string
+  monto_usd: number
+  cantidad: number
+}
+
 export default function GraficaCategorias({ movimientos }: GraficaCategoriasProps) {
   const [fechaDesde, setFechaDesde] = useState<string>('')
   const [fechaHasta, setFechaHasta] = useState<string>('')
+  const [datosCategoriasUSD, setDatosCategoriasUSD] = useState<DatosCategoriaUSD[]>([])
+  const [loading, setLoading] = useState(false)
   
   console.log('📊 GraficaCategorias renderizado con', movimientos.length, 'movimientos')
   
-  // Calcular distribución por categoría (excluyendo "por defecto")
-  const datosCategorias = useMemo(() => {
-    console.log('🔍 Calculando datos de categorías...')
-    const categoriasMap = new Map<string, number>()
+  // Cargar datos de la vista v_movimientos_categorizados_usd
+  useEffect(() => {
+    const cargarDatosUSD = async () => {
+      try {
+        setLoading(true)
+        
+        // Construir query base
+        let query = supabase
+          .from('v_movimientos_categorizados_usd')
+          .select('categoria, monto_usd, fecha_mov')
+        
+        // Aplicar filtros de fecha si existen
+        if (fechaDesde) {
+          query = query.gte('fecha_mov', fechaDesde)
+        }
+        if (fechaHasta) {
+          query = query.lte('fecha_mov', fechaHasta)
+        }
+        
+        const { data, error } = await query
+        
+        if (error) {
+          console.error('Error al cargar datos de categorías USD:', error)
+          return
+        }
+        
+        if (data) {
+          // Agrupar por categoría y sumar montos USD
+          const categoriasMap = new Map<string, { monto_usd: number; cantidad: number }>()
+          
+          data.forEach((mov: any) => {
+            const categoria = mov.categoria || 'Sin categoría'
+            // Excluir categorías que contengan "por defecto"
+            if (categoria.toLowerCase().includes('por defecto')) {
+              return
+            }
+            
+            const montoUSD = mov.monto_usd || 0
+            const actual = categoriasMap.get(categoria) || { monto_usd: 0, cantidad: 0 }
+            categoriasMap.set(categoria, {
+              monto_usd: actual.monto_usd + Number(montoUSD),
+              cantidad: actual.cantidad + 1
+            })
+          })
+          
+          const datos = Array.from(categoriasMap.entries()).map(([categoria, datos]) => ({
+            categoria,
+            monto_usd: datos.monto_usd,
+            cantidad: datos.cantidad
+          }))
+          
+          // Ordenar por monto USD descendente
+          datos.sort((a, b) => b.monto_usd - a.monto_usd)
+          
+          setDatosCategoriasUSD(datos)
+          console.log('✅ Datos de categorías USD cargados:', datos)
+        }
+      } catch (err) {
+        console.error('Error al cargar datos USD:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
     
+    cargarDatosUSD()
+  }, [fechaDesde, fechaHasta])
+  
+  // Calcular distribución por cantidad de movimientos
+  const datosCategoriasCantidad = useMemo(() => {
     // Filtrar movimientos por rango de fechas y excluyendo la categoría "por defecto"
     const movimientosFiltrados = movimientos.filter(mov => {
       // Filtro por fecha
@@ -39,6 +113,8 @@ export default function GraficaCategorias({ movimientos }: GraficaCategoriasProp
       return !categoria.toLowerCase().includes('por defecto')
     })
     
+    const categoriasMap = new Map<string, number>()
+    
     movimientosFiltrados.forEach(mov => {
       const categoria = mov.categoria_nombre || 'Sin categoría'
       categoriasMap.set(categoria, (categoriasMap.get(categoria) || 0) + 1)
@@ -52,10 +128,67 @@ export default function GraficaCategorias({ movimientos }: GraficaCategoriasProp
     }))
 
     // Ordenar por cantidad descendente
-    const datosOrdenados = datos.sort((a, b) => b.value - a.value)
-    console.log('✅ Datos de categorías calculados (excluyendo "por defecto"):', datosOrdenados)
-    return datosOrdenados
+    return datos.sort((a, b) => b.value - a.value)
   }, [movimientos, fechaDesde, fechaHasta])
+
+  // Calcular distribución por categoría con montos USD
+  const datosCategoriasUSDGrafica = useMemo(() => {
+    if (datosCategoriasUSD.length === 0) return []
+    
+    const totalUSD = datosCategoriasUSD.reduce((sum, cat) => sum + cat.monto_usd, 0)
+    
+    return datosCategoriasUSD.map(cat => ({
+      name: cat.categoria,
+      value: cat.monto_usd,
+      cantidad: cat.cantidad,
+      porcentaje: totalUSD !== 0 ? ((cat.monto_usd / totalUSD) * 100).toFixed(1) : '0.0'
+    }))
+  }, [datosCategoriasUSD])
+
+  // Combinar datos para la tabla (unificar por categoría)
+  const datosCombinados = useMemo(() => {
+    const mapa = new Map<string, { cantidad: number; montoUSD: number; porcentajeCantidad: string; porcentajeUSD: string }>()
+    
+    // Agregar datos de cantidad
+    datosCategoriasCantidad.forEach(cat => {
+      mapa.set(cat.name, {
+        cantidad: cat.value,
+        montoUSD: 0,
+        porcentajeCantidad: cat.porcentaje,
+        porcentajeUSD: '0.0'
+      })
+    })
+    
+    // Agregar datos de USD
+    datosCategoriasUSDGrafica.forEach(cat => {
+      const actual = mapa.get(cat.name) || {
+        cantidad: 0,
+        montoUSD: 0,
+        porcentajeCantidad: '0.0',
+        porcentajeUSD: '0.0'
+      }
+      mapa.set(cat.name, {
+        ...actual,
+        montoUSD: cat.value,
+        porcentajeUSD: cat.porcentaje
+      })
+    })
+    
+    return Array.from(mapa.entries()).map(([name, datos]) => ({
+      name,
+      ...datos
+    })).sort((a, b) => b.montoUSD - a.montoUSD)
+  }, [datosCategoriasCantidad, datosCategoriasUSDGrafica])
+
+  // Calcular totales
+  const totales = useMemo(() => {
+    const totalCantidad = datosCombinados.reduce((sum, cat) => sum + cat.cantidad, 0)
+    const totalMontoUSD = datosCombinados.reduce((sum, cat) => sum + cat.montoUSD, 0)
+    return {
+      cantidad: totalCantidad,
+      montoUSD: totalMontoUSD
+    }
+  }, [datosCombinados])
 
   // Colores para las categorías
   const COLORS = [
@@ -71,14 +204,18 @@ export default function GraficaCategorias({ movimientos }: GraficaCategoriasProp
     '#6366f1', // índigo
   ]
 
-  console.log('📈 Datos de categorías para gráfica:', datosCategorias)
+  console.log('📈 Datos de categorías para gráfica:', datosCategoriasCantidad, datosCategoriasUSDGrafica)
 
-  if (datosCategorias.length === 0) {
+  if (loading) {
+    return <p className="text-gray-500 text-center py-8">Cargando datos...</p>
+  }
+
+  if (datosCategoriasCantidad.length === 0 && datosCategoriasUSDGrafica.length === 0) {
     console.log('⚠️ No hay datos de categorías')
     return <p className="text-gray-500 text-center py-8">No hay datos para mostrar</p>
   }
 
-  console.log('✅ Renderizando gráfica con', datosCategorias.length, 'categorías')
+  console.log('✅ Renderizando gráficas con', datosCategoriasCantidad.length, 'categorías (cantidad) y', datosCategoriasUSDGrafica.length, 'categorías (USD)')
 
   return (
     <div className="w-full">
@@ -135,68 +272,137 @@ export default function GraficaCategorias({ movimientos }: GraficaCategoriasProp
         )}
       </div>
       
-      <div style={{ width: '100%', height: '400px' }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={datosCategorias}
-              cx="50%"
-              cy="50%"
-              labelLine={false}
-              label={({ name, payload }: any) => `${name}: ${payload?.porcentaje || '0.0'}%`}
-              outerRadius={120}
-              fill="#8884d8"
-              dataKey="value"
-            >
-              {datosCategorias.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip 
-              formatter={(value: number, name: string, props: any) => [
-                `${value} movimientos (${props.payload.porcentaje}%)`,
-                'Cantidad'
-              ]}
-            />
-            <Legend 
-              verticalAlign="bottom" 
-              height={36}
-              formatter={(value, entry: any) => `${value} (${entry.payload.porcentaje}%)`}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+      {/* Dos gráficas lado a lado */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+        {/* Gráfica de cantidad de movimientos */}
+        <div className="flex flex-col items-center">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
+            Por Cantidad de Movimientos
+          </h3>
+          <div style={{ width: '100%', height: '400px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={datosCategoriasCantidad}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={true}
+                  label={({ name, payload }: any) => `${name}: ${payload?.porcentaje || '0.0'}%`}
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {datosCategoriasCantidad.map((entry, index) => (
+                    <Cell key={`cell-cantidad-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value: number, name: string, props: any) => [
+                    `${value} movimientos (${props.payload.porcentaje}%)`,
+                    'Cantidad'
+                  ]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Gráfica de monto USD */}
+        <div className="flex flex-col items-center">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
+            Por Monto USD
+          </h3>
+          <div style={{ width: '100%', height: '400px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={datosCategoriasUSDGrafica}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={true}
+                  label={({ name, payload }: any) => `${name}: ${payload?.porcentaje || '0.0'}%`}
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {datosCategoriasUSDGrafica.map((entry, index) => (
+                    <Cell key={`cell-usd-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value: number, name: string, props: any) => [
+                    `${formatearMoneda(value, '$', 2)} (${props.payload.porcentaje}%)`,
+                    'Monto USD'
+                  ]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
       
       {/* Tabla de resumen */}
-      <div className="mt-6">
+      <div className="mt-12">
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-gray-100">
               <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700 border">Categoría</th>
               <th className="px-4 py-2 text-right text-sm font-semibold text-gray-700 border">Cantidad</th>
-              <th className="px-4 py-2 text-right text-sm font-semibold text-gray-700 border">Porcentaje</th>
+              <th className="px-4 py-2 text-right text-sm font-semibold text-gray-700 border">% Cantidad</th>
+              <th className="px-4 py-2 text-right text-sm font-semibold text-gray-700 border">Monto USD</th>
+              <th className="px-4 py-2 text-right text-sm font-semibold text-gray-700 border">% USD</th>
             </tr>
           </thead>
           <tbody>
-            {datosCategorias.map((categoria, index) => (
-              <tr key={categoria.name} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                <td className="px-4 py-2 text-sm text-gray-700 border">
-                  <div className="flex items-center gap-2">
-                    <div 
-                      className="w-4 h-4 rounded"
-                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                    />
-                    {categoria.name}
-                  </div>
-                </td>
-                <td className="px-4 py-2 text-sm text-right text-gray-700 border">
-                  {categoria.value}
-                </td>
-                <td className="px-4 py-2 text-sm text-right text-gray-700 font-semibold border">
-                  {categoria.porcentaje}%
-                </td>
-              </tr>
-            ))}
+            {datosCombinados.map((categoria, index) => {
+              // Encontrar el índice del color basado en el nombre de la categoría
+              const colorIndex = datosCategoriasCantidad.findIndex(c => c.name === categoria.name)
+              const finalColorIndex = colorIndex !== -1 ? colorIndex : index
+              
+              return (
+                <tr key={categoria.name} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <td className="px-4 py-2 text-sm text-gray-700 border">
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-4 h-4 rounded"
+                        style={{ backgroundColor: COLORS[finalColorIndex % COLORS.length] }}
+                      />
+                      {categoria.name}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 text-sm text-right text-gray-700 border">
+                    {categoria.cantidad}
+                  </td>
+                  <td className="px-4 py-2 text-sm text-right text-gray-700 font-semibold border">
+                    {categoria.porcentajeCantidad}%
+                  </td>
+                  <td className="px-4 py-2 text-sm text-right text-gray-700 font-semibold border">
+                    {formatearMoneda(categoria.montoUSD, '$', 2)}
+                  </td>
+                  <td className="px-4 py-2 text-sm text-right text-gray-700 font-semibold border">
+                    {categoria.porcentajeUSD}%
+                  </td>
+                </tr>
+              )
+            })}
+            {/* Fila de totales */}
+            <tr className="bg-gray-200 font-bold">
+              <td className="px-4 py-2 text-sm text-gray-900 border">
+                TOTAL
+              </td>
+              <td className="px-4 py-2 text-sm text-right text-gray-900 border">
+                {totales.cantidad}
+              </td>
+              <td className="px-4 py-2 text-sm text-right text-gray-900 border">
+                100.0%
+              </td>
+              <td className="px-4 py-2 text-sm text-right text-gray-900 border">
+                {formatearMoneda(totales.montoUSD, '$', 2)}
+              </td>
+              <td className="px-4 py-2 text-sm text-right text-gray-900 border">
+                100.0%
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>

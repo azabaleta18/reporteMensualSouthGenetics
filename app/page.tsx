@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession, signOut } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
-import { LogOut, Loader2, List } from 'lucide-react'
-import Link from 'next/link'
+import { LogOut, Loader2 } from 'lucide-react'
 import TablaDivisasDiarias from '@/components/TablaDivisasDiarias'
+import MenuNavegacion from '@/components/MenuNavegacion'
 
 export default function Home() {
   const [loading, setLoading] = useState(true)
@@ -78,6 +78,9 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-50">
+      {/* Menú de navegación */}
+      <MenuNavegacion />
+      
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* Header con botón de cerrar sesión */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -91,13 +94,6 @@ export default function Home() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Link
-                href="/movimientos-todos"
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                <List className="h-4 w-4" />
-                Todos los Movimientos
-              </Link>
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"

@@ -17,7 +17,7 @@ export default function TestSupabase() {
       
       // Test 1: Verificar fecha máxima
       const { data: fechaMax, error: errorFechaMax } = await supabase
-        .from('saldo_diario_cuenta')
+        .from('v_saldo_diario_cuentas_usd')
         .select('fecha')
         .order('fecha', { ascending: false })
         .limit(1)
@@ -30,7 +30,7 @@ export default function TestSupabase() {
 
       // Test 2: Contar total de registros
       const { count, error: errorCount } = await supabase
-        .from('saldo_diario_cuenta')
+        .from('v_saldo_diario_cuentas_usd')
         .select('*', { count: 'exact', head: true })
 
       if (errorCount) {
@@ -39,7 +39,7 @@ export default function TestSupabase() {
 
       // Test 3: Verificar fecha mínima
       const { data: fechaMin, error: errorFechaMin } = await supabase
-        .from('saldo_diario_cuenta')
+        .from('v_saldo_diario_cuentas_usd')
         .select('fecha')
         .order('fecha', { ascending: true })
         .limit(1)
@@ -50,44 +50,17 @@ export default function TestSupabase() {
 
       const fechaMinima = fechaMin?.[0]?.fecha
 
-      // Test 4: Verificar consulta completa con joins
+      // Test 4: Verificar consulta completa (la vista ya incluye nombre_banco y nombre_empresa)
       const { data: saldosTest, error: errorSaldos } = await supabase
-        .from('saldo_diario_cuenta')
+        .from('v_saldo_diario_cuentas_usd')
         .select(`
           id_cuenta,
           fecha,
           saldo_divisa,
           saldo_usd,
-          es_actual,
-          cuenta (
-            id_cuenta,
-            id_banco_pais_divisa,
-            id_empresa,
-            id_tipo_cuenta,
-            numero_cuenta,
-            banco_pais_divisa (
-              id_banco_pais_divisa,
-              codigo_divisa,
-              banco_pais (
-                id_banco_pais,
-                codigo_pais,
-                banco (
-                  id_banco,
-                  nombre
-                ),
-                pais (
-                  codigo_pais,
-                  nombre
-                )
-              ),
-              divisa (
-                codigo_divisa,
-                nombre,
-                simbolo,
-                decimales
-              )
-            )
-          )
+          hubo_movimientos,
+          nombre_banco,
+          nombre_empresa
         `)
         .order('fecha', { ascending: false })
         .limit(5)

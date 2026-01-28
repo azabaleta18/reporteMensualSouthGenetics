@@ -5,10 +5,10 @@ export async function testSupabaseConnection() {
   console.log('🔍 Iniciando test de conexión a Supabase...')
   
   try {
-    // Test 1: Verificar fecha máxima en saldo_diario_cuenta
-    console.log('\n📅 Test 1: Verificando fecha máxima en saldo_diario_cuenta...')
+    // Test 1: Verificar fecha máxima en v_saldo_diario_cuentas_usd
+    console.log('\n📅 Test 1: Verificando fecha máxima en v_saldo_diario_cuentas_usd...')
     const { data: fechaMax, error: errorFechaMax } = await supabase
-      .from('saldo_diario_cuenta')
+      .from('v_saldo_diario_cuentas_usd')
       .select('fecha')
       .order('fecha', { ascending: false })
       .limit(1)
@@ -30,19 +30,19 @@ export async function testSupabaseConnection() {
     // Test 2: Contar total de registros
     console.log('\n📊 Test 2: Contando total de registros...')
     const { count, error: errorCount } = await supabase
-      .from('saldo_diario_cuenta')
+      .from('v_saldo_diario_cuentas_usd')
       .select('*', { count: 'exact', head: true })
 
     if (errorCount) {
       console.error('❌ Error al contar registros:', errorCount)
     } else {
-      console.log(`✅ Total de registros en saldo_diario_cuenta: ${count}`)
+      console.log(`✅ Total de registros en v_saldo_diario_cuentas_usd: ${count}`)
     }
 
     // Test 3: Verificar rango de fechas
     console.log('\n📅 Test 3: Verificando rango de fechas...')
     const { data: fechaMin, error: errorFechaMin } = await supabase
-      .from('saldo_diario_cuenta')
+      .from('v_saldo_diario_cuentas_usd')
       .select('fecha')
       .order('fecha', { ascending: true })
       .limit(1)
@@ -56,45 +56,18 @@ export async function testSupabaseConnection() {
       console.log(`✅ Rango completo: ${fechaMinima} → ${fechaMaxima}`)
     }
 
-    // Test 4: Verificar consulta completa con joins
-    console.log('\n🔗 Test 4: Verificando consulta completa con joins...')
+    // Test 4: Verificar consulta completa (la vista ya incluye nombre_banco y nombre_empresa)
+    console.log('\n🔗 Test 4: Verificando consulta completa...')
     const { data: saldosTest, error: errorSaldos } = await supabase
-      .from('saldo_diario_cuenta')
+      .from('v_saldo_diario_cuentas_usd')
       .select(`
         id_cuenta,
         fecha,
         saldo_divisa,
         saldo_usd,
-        es_actual,
-        cuenta (
-          id_cuenta,
-          id_banco_pais_divisa,
-          id_empresa,
-          id_tipo_cuenta,
-          numero_cuenta,
-          banco_pais_divisa (
-            id_banco_pais_divisa,
-            codigo_divisa,
-            banco_pais (
-              id_banco_pais,
-              codigo_pais,
-              banco (
-                id_banco,
-                nombre
-              ),
-              pais (
-                codigo_pais,
-                nombre
-              )
-            ),
-            divisa (
-              codigo_divisa,
-              nombre,
-              simbolo,
-              decimales
-            )
-          )
-        )
+        hubo_movimientos,
+        nombre_banco,
+        nombre_empresa
       `)
       .order('fecha', { ascending: false })
       .limit(5)

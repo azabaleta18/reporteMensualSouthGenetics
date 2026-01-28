@@ -9,9 +9,19 @@ export interface Cuenta {
   id_tipo_cuenta: number
   numero_cuenta: string | null
   nombre_sheet_origen: string | null
+  id_journal_odoo: number | null
+  activo: boolean
+}
+
+// Vista que calcula dinámicamente fecha y saldo del último movimiento
+export interface CuentaUltimoMovimiento extends Cuenta {
   fecha_ultimo_mov: string | null
   saldo_ultimo_mov: number | null
-  id_journal_odoo: number | null
+}
+
+export interface CuentaCompletaUltimoMovimiento extends CuentaCompleta {
+  fecha_ultimo_mov: string | null
+  saldo_ultimo_mov: number | null
 }
 
 export interface SaldoDiarioCuenta {
@@ -56,10 +66,11 @@ export async function obtenerCuentasCompletas(): Promise<CuentaCompleta[]> {
   }
 
   try {
-    // Obtener todas las cuentas
+    // Obtener solo las cuentas activas
     const { data: cuentas, error: errorCuentas } = await supabase
       .from('cuenta')
       .select('*')
+      .eq('activo', true)
 
     if (errorCuentas) throw errorCuentas
 
@@ -111,6 +122,80 @@ export async function obtenerCuentasCompletas(): Promise<CuentaCompleta[]> {
 }
 
 /**
+ * Obtiene todas las cuentas completas con información de último movimiento
+ * Usa la vista v_cuenta_ultimo_movimiento para obtener fecha y saldo del último movimiento calculados dinámicamente
+ */
+export async function obtenerCuentasCompletasConUltimoMovimiento(): Promise<CuentaCompletaUltimoMovimiento[]> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.error('Variables de entorno de Supabase no configuradas')
+    return []
+  }
+
+  try {
+    // Obtener cuentas con último movimiento desde la vista
+    const { data: cuentasUltimoMov, error: errorCuentas } = await supabase
+      .from('v_cuenta_ultimo_movimiento')
+      .select('*')
+
+    if (errorCuentas) throw errorCuentas
+
+    // Obtener banco_pais_divisa
+    const { data: bancoPaisDivisa, error: errorBPD } = await supabase
+      .from('banco_pais_divisa')
+      .select('*')
+
+    if (errorBPD) throw errorBPD
+
+    // Obtener banco_pais
+    const { data: bancoPais, error: errorBP } = await supabase
+      .from('banco_pais')
+      .select('*')
+
+    if (errorBP) throw errorBP
+
+    // Obtener bancos
+    const { data: bancos, error: errorBancos } = await supabase
+      .from('banco')
+      .select('*')
+
+    if (errorBancos) throw errorBancos
+
+    // Crear mapas para búsqueda rápida
+    const bpdMap = new Map(bancoPaisDivisa?.map(b => [b.id_banco_pais_divisa, b]) || [])
+    const bpMap = new Map(bancoPais?.map(b => [b.id_banco_pais, b]) || [])
+    const bancoMap = new Map(bancos?.map(b => [b.id_banco, b]) || [])
+
+    // Combinar los datos manualmente
+    const cuentasCompletas: CuentaCompletaUltimoMovimiento[] = (cuentasUltimoMov || []).map((cuenta: any) => {
+      const bpd = bpdMap.get(cuenta.id_banco_pais_divisa)
+      const bp = bpd ? bpMap.get(bpd.id_banco_pais) : null
+      const banco = bp ? bancoMap.get(bp.id_banco) : null
+
+      return {
+        id_cuenta: cuenta.id_cuenta,
+        id_empresa: cuenta.id_empresa,
+        id_banco_pais_divisa: cuenta.id_banco_pais_divisa,
+        id_tipo_cuenta: cuenta.id_tipo_cuenta,
+        numero_cuenta: cuenta.numero_cuenta,
+        nombre_sheet_origen: cuenta.nombre_sheet_origen,
+        id_journal_odoo: cuenta.id_journal_odoo,
+        activo: cuenta.activo,
+        banco_nombre: banco?.nombre || '',
+        codigo_divisa: bpd?.codigo_divisa || '',
+        codigo_pais: bp?.codigo_pais || '',
+        fecha_ultimo_mov: cuenta.fecha_ultimo_mov,
+        saldo_ultimo_mov: cuenta.saldo_ultimo_mov,
+      }
+    })
+
+    return cuentasCompletas
+  } catch (error) {
+    console.error('Error al obtener cuentas completas con último movimiento:', error)
+    return []
+  }
+}
+
+/**
  * Obtiene los saldos diarios agrupados por fecha
  */
 export async function obtenerSaldosDiariosPorFecha(
@@ -123,7 +208,7 @@ export async function obtenerSaldosDiariosPorFecha(
   }
 
   let query = supabase
-    .from('saldo_diario_cuenta')
+    .from('v_saldo_diario_cuentas_usd')
     .select('*')
     .order('fecha', { ascending: true })
 
@@ -172,7 +257,7 @@ export async function obtenerSaldosDiariosCompletos(
   try {
     // Obtener saldos diarios
     let querySaldos = supabase
-      .from('saldo_diario_cuenta')
+      .from('v_saldo_diario_cuentas_usd')
       .select('*')
       .order('fecha', { ascending: true })
 

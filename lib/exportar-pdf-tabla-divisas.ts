@@ -28,7 +28,7 @@ interface OpcionesExportacionPDF {
   bancosPorDivisa: Map<string, BancoInfo[]>
   expandedMonths: Set<string>
   expandedCurrencies: Set<string>
-  divisasEnUSD: Set<string>
+  mostrarEnUSD: boolean
   tasasCambio: Map<string, number>
   datos: any[] // Datos originales para calcular USD
   calcularSaldoUSD: (saldoDivisa: number, codigoDivisa: string) => number
@@ -48,7 +48,7 @@ export function exportarTablaDivisasAPDF(
     bancosPorDivisa,
     expandedMonths,
     expandedCurrencies,
-    divisasEnUSD,
+    mostrarEnUSD,
     tasasCambio,
     datos,
     calcularSaldoUSD
@@ -77,7 +77,7 @@ export function exportarTablaDivisasAPDF(
   divisasUnicas.forEach(divisa => {
     const isExpanded = expandedCurrencies.has(divisa.codigo)
     const bancos = bancosPorDivisa.get(divisa.codigo) || []
-    const enUSD = divisa.codigo === 'USD' ? true : divisasEnUSD.has(divisa.codigo)
+    const enUSD = mostrarEnUSD
     const simbolo = enUSD ? 'US$' : divisa.simbolo
     
     if (isExpanded && bancos.length > 0) {
@@ -125,7 +125,7 @@ export function exportarTablaDivisasAPDF(
         divisasUnicas.forEach(divisa => {
           const isExpanded = expandedCurrencies.has(divisa.codigo)
           const bancos = bancosPorDivisa.get(divisa.codigo) || []
-          const enUSD = divisa.codigo === 'USD' ? true : divisasEnUSD.has(divisa.codigo)
+          const enUSD = mostrarEnUSD
           const divisaData = datoFecha.divisas.get(divisa.codigo)
           
           if (isExpanded && bancos.length > 0) {
@@ -214,7 +214,7 @@ export function exportarTablaDivisasAPDF(
       divisasUnicas.forEach(divisa => {
         const isExpanded = expandedCurrencies.has(divisa.codigo)
         const bancos = bancosPorDivisa.get(divisa.codigo) || []
-        const enUSD = divisa.codigo === 'USD' ? true : divisasEnUSD.has(divisa.codigo)
+        const enUSD = mostrarEnUSD
         const divisaData = datoMes.divisas.get(divisa.codigo)
         
         if (isExpanded && bancos.length > 0) {

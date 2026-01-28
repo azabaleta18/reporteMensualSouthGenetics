@@ -45,10 +45,15 @@ export interface Cuenta {
   id_tipo_cuenta: number
   numero_cuenta: string
   nombre_sheet_origen: string | null
+  id_journal_odoo: number | null
+  activo: boolean
+  banco_pais_divisa?: BancoPaisDivisa
+}
+
+// Vista que calcula dinámicamente fecha y saldo del último movimiento
+export interface CuentaUltimoMovimiento extends Cuenta {
   fecha_ultimo_mov: string | null
   saldo_ultimo_mov: number | null
-  id_journal_odoo: number | null
-  banco_pais_divisa?: BancoPaisDivisa
 }
 
 export interface SaldoDiarioCuenta {

@@ -52,3 +52,26 @@ input[type="date"]::-webkit-datetime-edit-year-field {
   opacity: 1 !important;
 }
 
+/* Estilos para la barra de scroll horizontal siempre visible en tabla general */
+.tabla-general-scroll {
+  overflow-x: scroll !important;
+  overflow-y: auto;
+}
+
+.tabla-general-scroll::-webkit-scrollbar {
+  height: 12px;
+}
+
+.tabla-general-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 6px;
+}
+
+.tabla-general-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 6px;
+}
+
+.tabla-general-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
