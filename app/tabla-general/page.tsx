@@ -1507,8 +1507,8 @@ export default function TablaGeneral() {
   }
 
   const limpiarFiltros = () => {
-    setFechaDesde('2026-01-01')
-    setFechaHasta('2026-12-31')
+    setFechaDesde('')
+    setFechaHasta('')
     setDivisasSeleccionadas(new Set())
     setBancosSeleccionados(new Set())
     setCategoriasSeleccionadas(new Set())
