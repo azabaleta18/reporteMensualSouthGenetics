@@ -20,7 +20,7 @@ export default function Login() {
     const checkAuth = async () => {
       const { user } = await getSession()
       if (user) {
-        router.push('/')
+        router.push('/tabla-general')
       }
       setCheckingAuth(false)
     }
@@ -42,7 +42,7 @@ export default function Login() {
       }
 
       if (data.user) {
-        router.push('/')
+        router.push('/tabla-general')
         router.refresh()
       }
     } catch (err: any) {
