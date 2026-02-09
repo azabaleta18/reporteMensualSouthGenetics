@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSession, signOut } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
-import { LogOut, Loader2, ChevronDown, ChevronRight, ChevronUp, AlertCircle, Filter, Calendar, Building2, Tag, DollarSign, ChevronsDown, ChevronsUp, Briefcase, Table2 } from 'lucide-react'
+import { LogOut, Loader2, ChevronDown, ChevronRight, ChevronUp, AlertCircle, Filter, Calendar, Building2, Tag, DollarSign, ChevronsDown, ChevronsUp, Briefcase, Table2, Globe } from 'lucide-react'
 import MenuNavegacion from '@/components/MenuNavegacion'
 import { formatearMoneda } from '@/lib/formato-moneda'
 import { obtenerTasasCambioUltimaFecha } from '@/lib/divisas'
@@ -24,6 +24,7 @@ interface Movimiento {
   codigo_divisa: string
   nombre_banco: string
   nombre_sheet_origen: string | null
+  nombre_pais: string | null
   simbolo_divisa: string
   decimales_divisa: number
   id_banco: number
@@ -85,21 +86,24 @@ export default function TablaGeneral() {
   const [fechaDesde, setFechaDesde] = useState<string>('2026-01-01')
   const [fechaHasta, setFechaHasta] = useState<string>('2026-12-31')
   const [divisasSeleccionadas, setDivisasSeleccionadas] = useState<Set<string>>(new Set())
-  const [bancosSeleccionados, setBancosSeleccionados] = useState<Set<string>>(new Set()) // nombre_sheet_origen o nombre_banco
+  const [bancosSheetSeleccionados, setBancosSheetSeleccionados] = useState<Set<string>>(new Set()) // nombre_sheet_origen o nombre_banco
+  const [bancosSeleccionados, setBancosSeleccionados] = useState<Set<number>>(new Set()) // Por id_banco
+  const [paisesSeleccionados, setPaisesSeleccionados] = useState<Set<string>>(new Set())
   const [categoriasSeleccionadas, setCategoriasSeleccionadas] = useState<Set<number>>(new Set())
   const [empresas, setEmpresas] = useState<Array<{ id_empresa: number; nombre: string }>>([])
   const [empresasSeleccionadas, setEmpresasSeleccionadas] = useState<Set<number>>(new Set())
-  const [nombresSheetOrigen, setNombresSheetOrigen] = useState<string[]>([])
-  const [nombresSheetOrigenSeleccionados, setNombresSheetOrigenSeleccionados] = useState<Set<string>>(new Set())
+  const [bancosSheet, setBancosSheet] = useState<string[]>([]) // nombre_sheet_origen o nombre_banco
+  const [paises, setPaises] = useState<string[]>([])
   
   // Estado para controlar qué secciones de filtros están abiertas
   const [seccionesFiltrosAbiertas, setSeccionesFiltrosAbiertas] = useState({
     fechas: true,
+    bancosSheet: true,
     bancos: true,
+    pais: true,
     categorias: true,
     divisas: true,
-    empresas: true,
-    nombresSheetOrigen: true
+    empresas: true
   })
 
   const toggleSeccionFiltro = (seccion: keyof typeof seccionesFiltrosAbiertas) => {
@@ -436,26 +440,65 @@ export default function TablaGeneral() {
           }
         })
         
-        // Crear lista de bancos únicos basada en los movimientos (nombre_sheet_origen o nombre_banco)
-        const bancosUnicos = Array.from(new Set(
+        // Cargar bancos que tienen al menos una cuenta activa
+        const { data: cuentasBancosData, error: errorCuentasBancos } = await supabase
+          .from('cuenta')
+          .select(`
+            banco_pais_divisa (
+              banco_pais (
+                banco (
+                  id_banco,
+                  nombre
+                )
+              )
+            )
+          `)
+          .eq('activo', true)
+
+        if (errorCuentasBancos) {
+          console.error('Error al cargar bancos desde cuentas:', errorCuentasBancos)
+        } else if (cuentasBancosData) {
+          const bancosMap = new Map<number, { id_banco: number; nombre: string }>()
+          cuentasBancosData.forEach(c => {
+            const banco = (c.banco_pais_divisa as any)?.banco_pais?.banco
+            if (banco && banco.id_banco && banco.nombre) {
+              bancosMap.set(banco.id_banco, { id_banco: banco.id_banco, nombre: banco.nombre })
+            }
+          })
+          const bancosUnicos = Array.from(bancosMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+          setBancos(bancosUnicos)
+        }
+        
+        // Crear lista de bancos/sheets (nombre_sheet_origen o nombre_banco)
+        const bancosSheetUnicos = Array.from(new Set(
           todosLosMovimientos.map(m => m.nombre_sheet_origen || m.nombre_banco).filter(Boolean)
         )).sort()
+        setBancosSheet(bancosSheetUnicos)
         
-        // Convertir a formato Banco para el filtro
-        const bancosParaFiltro: Banco[] = bancosUnicos.map((nombre, index) => ({
-          id_banco: index + 1, // ID temporal, no se usa realmente
-          nombre: nombre
-        }))
-        
-        setBancos(bancosParaFiltro)
-        
-        // Crear lista de nombres sheet origen únicos
-        const nombresSheetOrigenUnicos = Array.from(
-          new Set(
-            todosLosMovimientos.map(m => m.nombre_sheet_origen).filter((nombre): nombre is string => nombre !== null)
-          )
-        ).sort()
-        setNombresSheetOrigen(nombresSheetOrigenUnicos)
+        // Cargar países que tienen al menos una cuenta activa
+        const { data: cuentasPaisesData, error: errorCuentasPaises } = await supabase
+          .from('cuenta')
+          .select(`
+            banco_pais_divisa (
+              banco_pais (
+                pais (
+                  nombre
+                )
+              )
+            )
+          `)
+          .eq('activo', true)
+
+        if (errorCuentasPaises) {
+          console.error('Error al cargar países desde cuentas:', errorCuentasPaises)
+        } else if (cuentasPaisesData) {
+          const paisesUnicos = new Set<string>()
+          cuentasPaisesData.forEach(c => {
+            const nombrePais = (c.banco_pais_divisa as any)?.banco_pais?.pais?.nombre
+            if (nombrePais) paisesUnicos.add(nombrePais)
+          })
+          setPaises(Array.from(paisesUnicos).sort())
+        }
         
         // Crear lista de divisas únicas basada en los movimientos
         const divisasMap = new Map<string, { nombre: string; simbolo: string; decimales: number }>()
@@ -554,11 +597,26 @@ export default function TablaGeneral() {
       )
     }
     
-    // Filtrar por bancos/sheets
+    // Filtrar por bancos/sheets (nombre_sheet_origen o nombre_banco)
+    if (bancosSheetSeleccionados.size > 0) {
+      movimientosFilt = movimientosFilt.filter(mov => {
+        const nombreBancoSheet = mov.nombre_sheet_origen || mov.nombre_banco
+        return nombreBancoSheet && bancosSheetSeleccionados.has(nombreBancoSheet)
+      })
+    }
+    
+    // Filtrar por bancos (id_banco)
     if (bancosSeleccionados.size > 0) {
       movimientosFilt = movimientosFilt.filter(mov => {
-        const nombreBanco = mov.nombre_sheet_origen || mov.nombre_banco
-        return bancosSeleccionados.has(nombreBanco)
+        return mov.id_banco && bancosSeleccionados.has(mov.id_banco)
+      })
+    }
+    
+    // Filtrar por país
+    if (paisesSeleccionados.size > 0) {
+      movimientosFilt = movimientosFilt.filter(mov => {
+        const nombrePais = mov.nombre_pais
+        return nombrePais && paisesSeleccionados.has(nombrePais)
       })
     }
     
@@ -575,17 +633,9 @@ export default function TablaGeneral() {
         mov.id_empresa !== null && mov.id_empresa !== undefined && empresasSeleccionadas.has(mov.id_empresa)
       )
     }
-
-    // Filtrar por nombre sheet origen
-    if (nombresSheetOrigenSeleccionados.size > 0) {
-      movimientosFilt = movimientosFilt.filter(mov => {
-        const nombreSheet = mov.nombre_sheet_origen
-        return nombreSheet && nombresSheetOrigenSeleccionados.has(nombreSheet)
-      })
-    }
     
     setMovimientosFiltrados(movimientosFilt)
-  }, [movimientos, fechaDesde, fechaHasta, divisasSeleccionadas, bancosSeleccionados, categoriasSeleccionadas, empresasSeleccionadas, nombresSheetOrigenSeleccionados])
+  }, [movimientos, fechaDesde, fechaHasta, divisasSeleccionadas, bancosSheetSeleccionados, bancosSeleccionados, paisesSeleccionados, categoriasSeleccionadas, empresasSeleccionadas])
 
   // Usar movimientosFiltrados solo para determinar qué mostrar (columnas, filas)
   // PERO los cálculos de saldo siempre usan TODOS los movimientos (sin filtrar)
@@ -1286,16 +1336,17 @@ export default function TablaGeneral() {
   }
 
   // Calcular saldo inicial total (sin filtrar por categoría) - saldo antes de la primera fecha
-  // IMPORTANTE: Usa TODOS los movimientos (sin filtrar) para calcular el saldo correcto
+  // IMPORTANTE: Usa el parámetro primeraFecha para cada periodo (ej: para feb = saldo final de ene)
+  // Usa TODOS los movimientos (sin filtrar) para calcular el saldo correcto
   const calcularSaldoInicialTotal = (divisa: string, banco: string, primeraFecha: string): number => {
-    // Si no hay filtro de fecha (fechaDesde está vacío), el saldo inicial debe ser 0
-    // porque estamos mostrando toda la historia desde el inicio del sistema (1 de enero de 2025)
-    if (!fechaDesde || fechaDesde === '') {
+    // Si no hay fecha de referencia, el saldo inicial es 0
+    if (!primeraFecha || primeraFecha === '') {
       return 0
     }
     
-    // Si hay un filtro de fecha desde, usar esa fecha como referencia
-    const fechaReferenciaDate = parsearFechaLocal(fechaDesde)
+    // Usar la primera fecha del periodo como referencia (balance antes de esta fecha)
+    // Así, el saldo inicial de febrero = saldo final de enero (movimientos antes del 1° de feb)
+    const fechaReferenciaDate = parsearFechaLocal(primeraFecha)
     fechaReferenciaDate.setHours(0, 0, 0, 0)
     
     // Si la fecha de referencia es el 1 de enero de 2025 o anterior, el saldo inicial es 0
@@ -1482,25 +1533,37 @@ export default function TablaGeneral() {
     })
   }
 
-  const toggleBancoFiltro = (banco: string) => {
-    setBancosSeleccionados(prev => {
+  const toggleBancoSheetFiltro = (nombreBancoSheet: string) => {
+    setBancosSheetSeleccionados(prev => {
       const nuevo = new Set(prev)
-      if (nuevo.has(banco)) {
-        nuevo.delete(banco)
+      if (nuevo.has(nombreBancoSheet)) {
+        nuevo.delete(nombreBancoSheet)
       } else {
-        nuevo.add(banco)
+        nuevo.add(nombreBancoSheet)
       }
       return nuevo
     })
   }
 
-  const toggleNombreSheetOrigenFiltro = (nombreSheet: string) => {
-    setNombresSheetOrigenSeleccionados(prev => {
+  const toggleBancoFiltro = (idBanco: number) => {
+    setBancosSeleccionados(prev => {
       const nuevo = new Set(prev)
-      if (nuevo.has(nombreSheet)) {
-        nuevo.delete(nombreSheet)
+      if (nuevo.has(idBanco)) {
+        nuevo.delete(idBanco)
       } else {
-        nuevo.add(nombreSheet)
+        nuevo.add(idBanco)
+      }
+      return nuevo
+    })
+  }
+
+  const togglePaisFiltro = (nombrePais: string) => {
+    setPaisesSeleccionados(prev => {
+      const nuevo = new Set(prev)
+      if (nuevo.has(nombrePais)) {
+        nuevo.delete(nombrePais)
+      } else {
+        nuevo.add(nombrePais)
       }
       return nuevo
     })
@@ -1510,10 +1573,11 @@ export default function TablaGeneral() {
     setFechaDesde('')
     setFechaHasta('')
     setDivisasSeleccionadas(new Set())
+    setBancosSheetSeleccionados(new Set())
     setBancosSeleccionados(new Set())
+    setPaisesSeleccionados(new Set())
     setCategoriasSeleccionadas(new Set())
     setEmpresasSeleccionadas(new Set())
-    setNombresSheetOrigenSeleccionados(new Set())
   }
 
   const expandirUnNivel = () => {
@@ -1663,7 +1727,7 @@ export default function TablaGeneral() {
                 )}
               </button>
               <div className="ml-auto flex gap-3 items-center">
-                {(divisasSeleccionadas.size > 0 || bancosSeleccionados.size > 0 || categoriasSeleccionadas.size > 0 || empresasSeleccionadas.size > 0 || nombresSheetOrigenSeleccionados.size > 0 || fechaDesde || fechaHasta) && (
+                {(divisasSeleccionadas.size > 0 || bancosSheetSeleccionados.size > 0 || bancosSeleccionados.size > 0 || paisesSeleccionados.size > 0 || categoriasSeleccionadas.size > 0 || empresasSeleccionadas.size > 0 || fechaDesde || fechaHasta) && (
                   <button
                     onClick={limpiarFiltros}
                     className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors font-medium"
@@ -1675,7 +1739,7 @@ export default function TablaGeneral() {
             </div>
             
             {/* Indicador de filtros aplicados */}
-            {(divisasSeleccionadas.size > 0 || bancosSeleccionados.size > 0 || categoriasSeleccionadas.size > 0 || empresasSeleccionadas.size > 0 || nombresSheetOrigenSeleccionados.size > 0 || fechaDesde || fechaHasta) && (
+            {(divisasSeleccionadas.size > 0 || bancosSheetSeleccionados.size > 0 || bancosSeleccionados.size > 0 || paisesSeleccionados.size > 0 || categoriasSeleccionadas.size > 0 || empresasSeleccionadas.size > 0 || fechaDesde || fechaHasta) && (
               <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
                 <p className="text-sm text-blue-800 font-medium mb-1">Filtros aplicados:</p>
                 <div className="flex flex-wrap gap-2 text-xs text-blue-700">
@@ -1684,9 +1748,19 @@ export default function TablaGeneral() {
                       {Array.from(divisasSeleccionadas).join(', ')}
                     </span>
                   )}
+                  {bancosSheetSeleccionados.size > 0 && (
+                    <span className="px-2 py-1 bg-blue-100 rounded">
+                      {bancosSheetSeleccionados.size} banco(s)/sheet(s)
+                    </span>
+                  )}
                   {bancosSeleccionados.size > 0 && (
                     <span className="px-2 py-1 bg-blue-100 rounded">
-                      {bancosSeleccionados.size} banco(s)/sheet(s)
+                      {bancosSeleccionados.size} banco(s)
+                    </span>
+                  )}
+                  {paisesSeleccionados.size > 0 && (
+                    <span className="px-2 py-1 bg-blue-100 rounded">
+                      {paisesSeleccionados.size} país(es)
                     </span>
                   )}
                   {categoriasSeleccionadas.size > 0 && (
@@ -1697,11 +1771,6 @@ export default function TablaGeneral() {
                   {empresasSeleccionadas.size > 0 && (
                     <span className="px-2 py-1 bg-blue-100 rounded">
                       {empresasSeleccionadas.size} empresa(s)
-                    </span>
-                  )}
-                  {nombresSheetOrigenSeleccionados.size > 0 && (
-                    <span className="px-2 py-1 bg-blue-100 rounded">
-                      {nombresSheetOrigenSeleccionados.size} nombre(s) sheet origen
                     </span>
                   )}
                   {fechaDesde && (
@@ -1803,7 +1872,45 @@ export default function TablaGeneral() {
                   )}
                 </div>
 
-                {/* Filtro de Bancos/Sheets */}
+                {/* Filtro de Bancos / Sheet */}
+                <div className="border border-gray-200 rounded-md">
+                  <button
+                    onClick={() => toggleSeccionFiltro('bancosSheet')}
+                    className="w-full flex items-center justify-between p-2 hover:bg-gray-50 transition-colors"
+                  >
+                    <label className="text-xs font-medium text-gray-700 flex items-center gap-1.5 cursor-pointer">
+                      <Table2 className="h-3.5 w-3.5" />
+                      Bancos / Sheet
+                    </label>
+                    {seccionesFiltrosAbiertas.bancosSheet ? (
+                      <ChevronUp className="h-3.5 w-3.5 text-gray-600" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 text-gray-600" />
+                    )}
+                  </button>
+                  {seccionesFiltrosAbiertas.bancosSheet && (
+                    <div className="p-1.5 pt-0">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 border border-gray-200 rounded-md p-1.5">
+                        {bancosSheet.map(nombreBancoSheet => (
+                          <label
+                            key={nombreBancoSheet}
+                            className="flex items-center gap-1.5 p-1 border border-gray-300 rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={bancosSheetSeleccionados.has(nombreBancoSheet)}
+                              onChange={() => toggleBancoSheetFiltro(nombreBancoSheet)}
+                              className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-1 focus:ring-blue-500"
+                            />
+                            <span className="text-xs text-gray-700">{nombreBancoSheet}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Filtro de Bancos */}
                 <div className="border border-gray-200 rounded-md">
                   <button
                     onClick={() => toggleSeccionFiltro('bancos')}
@@ -1811,7 +1918,7 @@ export default function TablaGeneral() {
                   >
                     <label className="text-xs font-medium text-gray-700 flex items-center gap-1.5 cursor-pointer">
                       <Building2 className="h-3.5 w-3.5" />
-                      Bancos / Sheets
+                      Bancos
                     </label>
                     {seccionesFiltrosAbiertas.bancos ? (
                       <ChevronUp className="h-3.5 w-3.5 text-gray-600" />
@@ -1821,7 +1928,7 @@ export default function TablaGeneral() {
                   </button>
                   {seccionesFiltrosAbiertas.bancos && (
                     <div className="p-1.5 pt-0">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 border border-gray-200 rounded-md p-1.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 max-h-40 overflow-y-auto border border-gray-200 rounded-md p-1.5">
                         {bancos.map(banco => (
                           <label
                             key={banco.id_banco}
@@ -1829,11 +1936,49 @@ export default function TablaGeneral() {
                           >
                             <input
                               type="checkbox"
-                              checked={bancosSeleccionados.has(banco.nombre)}
-                              onChange={() => toggleBancoFiltro(banco.nombre)}
+                              checked={bancosSeleccionados.has(banco.id_banco)}
+                              onChange={() => toggleBancoFiltro(banco.id_banco)}
                               className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-1 focus:ring-blue-500"
                             />
                             <span className="text-xs text-gray-700">{banco.nombre}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Filtro de País */}
+                <div className="border border-gray-200 rounded-md">
+                  <button
+                    onClick={() => toggleSeccionFiltro('pais')}
+                    className="w-full flex items-center justify-between p-2 hover:bg-gray-50 transition-colors"
+                  >
+                    <label className="text-xs font-medium text-gray-700 flex items-center gap-1.5 cursor-pointer">
+                      <Globe className="h-3.5 w-3.5" />
+                      País
+                    </label>
+                    {seccionesFiltrosAbiertas.pais ? (
+                      <ChevronUp className="h-3.5 w-3.5 text-gray-600" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 text-gray-600" />
+                    )}
+                  </button>
+                  {seccionesFiltrosAbiertas.pais && (
+                    <div className="p-1.5 pt-0">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 border border-gray-200 rounded-md p-1.5">
+                        {paises.map(nombrePais => (
+                          <label
+                            key={nombrePais}
+                            className="flex items-center gap-1.5 p-1 border border-gray-300 rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={paisesSeleccionados.has(nombrePais)}
+                              onChange={() => togglePaisFiltro(nombrePais)}
+                              className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-1 focus:ring-blue-500"
+                            />
+                            <span className="text-xs text-gray-700">{nombrePais}</span>
                           </label>
                         ))}
                       </div>
@@ -1919,45 +2064,6 @@ export default function TablaGeneral() {
                   </div>
                 )}
 
-                {/* Filtro de Nombres Sheet Origen */}
-                {nombresSheetOrigen.length > 0 && (
-                  <div className="border border-gray-200 rounded-md">
-                    <button
-                      onClick={() => toggleSeccionFiltro('nombresSheetOrigen')}
-                      className="w-full flex items-center justify-between p-2 hover:bg-gray-50 transition-colors"
-                    >
-                      <label className="text-xs font-medium text-gray-700 flex items-center gap-1.5 cursor-pointer">
-                        <Table2 className="h-3.5 w-3.5" />
-                        Nombre Sheet Origen
-                      </label>
-                      {seccionesFiltrosAbiertas.nombresSheetOrigen ? (
-                        <ChevronUp className="h-3.5 w-3.5 text-gray-600" />
-                      ) : (
-                        <ChevronDown className="h-3.5 w-3.5 text-gray-600" />
-                      )}
-                    </button>
-                    {seccionesFiltrosAbiertas.nombresSheetOrigen && (
-                      <div className="p-1.5 pt-0">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 border border-gray-200 rounded-md p-1.5">
-                          {nombresSheetOrigen.map(nombreSheet => (
-                            <label
-                              key={nombreSheet}
-                              className="flex items-center gap-1.5 p-1 border border-gray-300 rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={nombresSheetOrigenSeleccionados.has(nombreSheet)}
-                                onChange={() => toggleNombreSheetOrigenFiltro(nombreSheet)}
-                                className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-1 focus:ring-blue-500"
-                              />
-                              <span className="text-xs text-gray-700">{nombreSheet}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -2568,13 +2674,12 @@ export default function TablaGeneral() {
                             const fechaB = new Date(b)
                             return fechaA.getTime() - fechaB.getTime()
                           })
-                          const primeraFecha = fechasAscendentes[0] || ''
+                          // Usar el primer día del mes para que saldo inicial feb = saldo final ene
+                          const primerDiaDelMes = `${año}-${String(mes).padStart(2, '0')}-01`
                           
                           if (!estaMesExpandido) {
-                            // Saldo inicial total por mes
-                            const saldoInicialMes = primeraFecha
-                              ? calcularSaldoInicialTotal(divisa, banco, primeraFecha)
-                              : 0
+                            // Saldo inicial total por mes (balance antes del 1° del mes = saldo final mes anterior)
+                            const saldoInicialMes = calcularSaldoInicialTotal(divisa, banco, primerDiaDelMes)
                             
                             const colorTexto = obtenerColorPorSigno(saldoInicialMes)
                             

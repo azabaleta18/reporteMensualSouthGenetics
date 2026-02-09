@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Loader2, AlertCircle, Filter, Calendar, Building2, Tag, DollarSign, Table2, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, ChevronUp, Briefcase, Download, Trash2, X, Plus, CheckSquare, Square } from 'lucide-react'
+import { Loader2, AlertCircle, Filter, Calendar, Building2, Tag, DollarSign, Table2, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, ChevronUp, Briefcase, Download, Trash2, X, Plus, CheckSquare, Square, Globe } from 'lucide-react'
 import { formatearMoneda, formatMonedaInput, parseMonedaInput } from '@/lib/formato-moneda'
 import { exportarACSV } from '@/lib/exportar-csv'
 import { exportarAExcel } from '@/lib/exportar-excel'
@@ -80,14 +80,16 @@ export default function MovimientosPage() {
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [divisas, setDivisas] = useState<Divisa[]>([])
   const [empresas, setEmpresas] = useState<Empresa[]>([])
-  const [nombresSheetOrigen, setNombresSheetOrigen] = useState<string[]>([])
+  const [bancosSheet, setBancosSheet] = useState<string[]>([]) // nombre_sheet_origen o nombre_banco
+  const [paises, setPaises] = useState<string[]>([])
   
   // Filtros activos (se aplican automáticamente)
-  const [bancosSeleccionados, setBancosSeleccionados] = useState<Set<number>>(new Set())
+  const [bancosSeleccionados, setBancosSeleccionados] = useState<Set<number>>(new Set()) // Por id_banco
+  const [bancosSheetSeleccionados, setBancosSheetSeleccionados] = useState<Set<string>>(new Set()) // Por nombre_sheet_origen o nombre_banco
+  const [paisesSeleccionados, setPaisesSeleccionados] = useState<Set<string>>(new Set())
   const [categoriasSeleccionadas, setCategoriasSeleccionadas] = useState<Set<number>>(new Set())
   const [divisasSeleccionadas, setDivisasSeleccionadas] = useState<Set<string>>(new Set())
   const [empresasSeleccionadas, setEmpresasSeleccionadas] = useState<Set<number>>(new Set())
-  const [nombresSheetOrigenSeleccionados, setNombresSheetOrigenSeleccionados] = useState<Set<string>>(new Set())
   const [fechaDesde, setFechaDesde] = useState<string>('')
   const [fechaHasta, setFechaHasta] = useState<string>('')
   const [cuentaIdSeleccionada, setCuentaIdSeleccionada] = useState<number | null>(null)
@@ -103,11 +105,12 @@ export default function MovimientosPage() {
   // Estado para controlar qué secciones de filtros están abiertas
   const [seccionesFiltrosAbiertas, setSeccionesFiltrosAbiertas] = useState({
     fechas: true,
+    bancosSheet: true,
     bancos: true,
+    pais: true,
     categorias: true,
     divisas: true,
     empresas: true,
-    nombresSheetOrigen: true,
     columnasVisibles: true
   })
 
@@ -174,10 +177,11 @@ export default function MovimientosPage() {
 
   const cargarMovimientos = useCallback(async (
     filtrosBancos: Set<number> = bancosSeleccionados,
+    filtrosBancosSheet: Set<string> = bancosSheetSeleccionados,
+    filtrosPaises: Set<string> = paisesSeleccionados,
     filtrosCategorias: Set<number> = categoriasSeleccionadas,
     filtrosDivisas: Set<string> = divisasSeleccionadas,
     filtrosEmpresas: Set<number> = empresasSeleccionadas,
-    filtrosNombresSheetOrigen: Set<string> = nombresSheetOrigenSeleccionados,
     filtroFechaDesde: string = fechaDesde,
     filtroFechaHasta: string = fechaHasta,
     filtroCuentaId: number | null = cuentaIdSeleccionada
@@ -317,6 +321,7 @@ export default function MovimientosPage() {
           if (!bancoPaisDivisa) return false
           
           const banco = bancoPaisDivisa?.banco_pais?.banco
+          const pais = bancoPaisDivisa?.banco_pais?.pais
           const divisa = bancoPaisDivisa?.divisa?.codigo_divisa
           
           // Filtrar por banco (si hay bancos seleccionados y no hay filtroCuentaId)
@@ -340,10 +345,20 @@ export default function MovimientosPage() {
             }
           }
 
-          // Filtrar por nombre_sheet_origen (si hay nombres seleccionados)
-          if (filtrosNombresSheetOrigen.size > 0) {
+          // Filtrar por bancos/sheet (nombre_sheet_origen o nombre_banco)
+          if (filtrosBancosSheet.size > 0) {
             const nombreSheet = cuenta?.nombre_sheet_origen
-            if (!nombreSheet || !filtrosNombresSheetOrigen.has(nombreSheet)) {
+            const nombreBanco = banco?.nombre
+            const nombreBancoSheet = nombreSheet || nombreBanco
+            if (!nombreBancoSheet || !filtrosBancosSheet.has(nombreBancoSheet)) {
+              return false
+            }
+          }
+
+          // Filtrar por país
+          if (filtrosPaises.size > 0) {
+            const nombrePais = pais?.nombre
+            if (!nombrePais || !filtrosPaises.has(nombrePais)) {
               return false
             }
           }
@@ -492,7 +507,7 @@ export default function MovimientosPage() {
     } finally {
       setLoading(false)
     }
-  }, [bancosSeleccionados, categoriasSeleccionadas, divisasSeleccionadas, empresasSeleccionadas, nombresSheetOrigenSeleccionados, fechaDesde, fechaHasta, cuentaIdSeleccionada])
+  }, [bancosSeleccionados, bancosSheetSeleccionados, paisesSeleccionados, categoriasSeleccionadas, divisasSeleccionadas, empresasSeleccionadas, fechaDesde, fechaHasta, cuentaIdSeleccionada])
 
   // Leer parámetros de la URL al cargar la página
   useEffect(() => {
@@ -628,7 +643,7 @@ export default function MovimientosPage() {
     // Cargar movimientos siempre
     // Si hay filtros activos, cargar inmediatamente
     // Si no hay filtros activos, también cargar (todos los movimientos)
-    const tieneFiltrosActivos = fechaDesde || fechaHasta || cuentaIdSeleccionada || divisasSeleccionadas.size > 0 || bancosSeleccionados.size > 0 || categoriasSeleccionadas.size > 0 || empresasSeleccionadas.size > 0 || nombresSheetOrigenSeleccionados.size > 0
+    const tieneFiltrosActivos = fechaDesde || fechaHasta || cuentaIdSeleccionada || divisasSeleccionadas.size > 0 || bancosSeleccionados.size > 0 || bancosSheetSeleccionados.size > 0 || paisesSeleccionados.size > 0 || categoriasSeleccionadas.size > 0 || empresasSeleccionadas.size > 0
     
     console.log('🔍 useEffect - Verificando si cargar movimientos:', {
       tieneFiltrosActivos,
@@ -639,14 +654,15 @@ export default function MovimientosPage() {
       bancosSeleccionados: Array.from(bancosSeleccionados),
       categoriasSeleccionadas: Array.from(categoriasSeleccionadas),
       empresasSeleccionadas: Array.from(empresasSeleccionadas),
-      nombresSheetOrigenSeleccionados: Array.from(nombresSheetOrigenSeleccionados),
+      bancosSheetSeleccionados: Array.from(bancosSheetSeleccionados),
+      paisesSeleccionados: Array.from(paisesSeleccionados),
       filtrosConfigurados
     })
     
     // Siempre cargar movimientos (con o sin filtros)
     console.log('✅ Ejecutando cargarMovimientos()')
     cargarMovimientos()
-  }, [bancosSeleccionados, categoriasSeleccionadas, divisasSeleccionadas, empresasSeleccionadas, nombresSheetOrigenSeleccionados, fechaDesde, fechaHasta, cuentaIdSeleccionada, filtrosConfigurados, cargarMovimientos])
+  }, [bancosSeleccionados, bancosSheetSeleccionados, paisesSeleccionados, categoriasSeleccionadas, divisasSeleccionadas, empresasSeleccionadas, fechaDesde, fechaHasta, cuentaIdSeleccionada, filtrosConfigurados, cargarMovimientos])
 
   // Cargar tasas de cambio según la última fecha visible
   useEffect(() => {
@@ -664,16 +680,33 @@ export default function MovimientosPage() {
 
   const cargarDatosFiltros = async () => {
     try {
-      // Cargar bancos
-      const { data: bancosData, error: errorBancos } = await supabase
-        .from('banco')
-        .select('id_banco, nombre')
-        .order('nombre', { ascending: true })
+      // Cargar bancos que tienen al menos una cuenta activa
+      const { data: cuentasBancosData, error: errorCuentasBancos } = await supabase
+        .from('cuenta')
+        .select(`
+          banco_pais_divisa (
+            banco_pais (
+              banco (
+                id_banco,
+                nombre
+              )
+            )
+          )
+        `)
+        .eq('activo', true)
 
-      if (errorBancos) {
-        console.error('Error al cargar bancos:', errorBancos)
-      } else if (bancosData) {
-        setBancos(bancosData)
+      if (errorCuentasBancos) {
+        console.error('Error al cargar bancos desde cuentas:', errorCuentasBancos)
+      } else if (cuentasBancosData) {
+        const bancosMap = new Map<number, { id_banco: number; nombre: string }>()
+        cuentasBancosData.forEach(c => {
+          const banco = (c.banco_pais_divisa as any)?.banco_pais?.banco
+          if (banco && banco.id_banco && banco.nombre) {
+            bancosMap.set(banco.id_banco, { id_banco: banco.id_banco, nombre: banco.nombre })
+          }
+        })
+        const bancosUnicos = Array.from(bancosMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+        setBancos(bancosUnicos)
       }
 
       // Cargar categorías
@@ -712,25 +745,58 @@ export default function MovimientosPage() {
         setEmpresas(empresasData)
       }
 
-      // Cargar nombres de sheet origen únicos
+      // Cargar bancos/sheets (nombre_sheet_origen o nombre_banco)
       const { data: cuentasData, error: errorCuentas } = await supabase
         .from('cuenta')
-        .select('nombre_sheet_origen')
+        .select(`
+          nombre_sheet_origen,
+          banco_pais_divisa (
+            banco_pais (
+              banco (
+                nombre
+              )
+            )
+          )
+        `)
         .eq('activo', true)
-        .not('nombre_sheet_origen', 'is', null)
 
       if (errorCuentas) {
-        console.error('Error al cargar nombres sheet origen:', errorCuentas)
+        console.error('Error al cargar bancos/sheets:', errorCuentas)
       } else if (cuentasData) {
-        // Obtener valores únicos y ordenados
-        const nombresUnicos = Array.from(
-          new Set(
-            cuentasData
-              .map(c => c.nombre_sheet_origen)
-              .filter((nombre): nombre is string => nombre !== null)
+        // Obtener valores únicos: nombre_sheet_origen o nombre_banco
+        const bancosSheetUnicos = new Set<string>()
+        cuentasData.forEach(c => {
+          const nombreSheet = c.nombre_sheet_origen
+          const nombreBanco = (c.banco_pais_divisa as any)?.banco_pais?.banco?.nombre
+          if (nombreSheet) bancosSheetUnicos.add(nombreSheet)
+          if (nombreBanco) bancosSheetUnicos.add(nombreBanco)
+        })
+        setBancosSheet(Array.from(bancosSheetUnicos).sort())
+      }
+
+      // Cargar países que tienen al menos una cuenta activa
+      const { data: cuentasPaisesData, error: errorCuentasPaises } = await supabase
+        .from('cuenta')
+        .select(`
+          banco_pais_divisa (
+            banco_pais (
+              pais (
+                nombre
+              )
+            )
           )
-        ).sort()
-        setNombresSheetOrigen(nombresUnicos)
+        `)
+        .eq('activo', true)
+
+      if (errorCuentasPaises) {
+        console.error('Error al cargar países desde cuentas:', errorCuentasPaises)
+      } else if (cuentasPaisesData) {
+        const paisesUnicos = new Set<string>()
+        cuentasPaisesData.forEach(c => {
+          const nombrePais = (c.banco_pais_divisa as any)?.banco_pais?.pais?.nombre
+          if (nombrePais) paisesUnicos.add(nombrePais)
+        })
+        setPaises(Array.from(paisesUnicos).sort())
       }
     } catch (err: any) {
       console.error('Error al cargar datos de filtros:', err)
@@ -786,13 +852,25 @@ export default function MovimientosPage() {
     })
   }
 
-  const toggleNombreSheetOrigen = (nombreSheet: string) => {
-    setNombresSheetOrigenSeleccionados(prev => {
+  const toggleBancoSheet = (nombreBancoSheet: string) => {
+    setBancosSheetSeleccionados(prev => {
       const newSet = new Set(prev)
-      if (newSet.has(nombreSheet)) {
-        newSet.delete(nombreSheet)
+      if (newSet.has(nombreBancoSheet)) {
+        newSet.delete(nombreBancoSheet)
       } else {
-        newSet.add(nombreSheet)
+        newSet.add(nombreBancoSheet)
+      }
+      return newSet
+    })
+  }
+
+  const togglePais = (nombrePais: string) => {
+    setPaisesSeleccionados(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(nombrePais)) {
+        newSet.delete(nombrePais)
+      } else {
+        newSet.add(nombrePais)
       }
       return newSet
     })
@@ -906,7 +984,8 @@ export default function MovimientosPage() {
     setCategoriasSeleccionadas(new Set())
     setDivisasSeleccionadas(new Set())
     setEmpresasSeleccionadas(new Set())
-    setNombresSheetOrigenSeleccionados(new Set())
+    setBancosSheetSeleccionados(new Set())
+    setPaisesSeleccionados(new Set())
     setFechaDesde('')
     setFechaHasta('')
     setCuentaIdSeleccionada(null)
@@ -1571,7 +1650,7 @@ export default function MovimientosPage() {
                     <span className="text-sm">Aplicando filtros...</span>
                   </div>
                 )}
-                {(bancosSeleccionados.size > 0 || categoriasSeleccionadas.size > 0 || divisasSeleccionadas.size > 0 || empresasSeleccionadas.size > 0 || nombresSheetOrigenSeleccionados.size > 0 || fechaDesde || fechaHasta) && (
+                {(bancosSeleccionados.size > 0 || bancosSheetSeleccionados.size > 0 || paisesSeleccionados.size > 0 || categoriasSeleccionadas.size > 0 || divisasSeleccionadas.size > 0 || empresasSeleccionadas.size > 0 || fechaDesde || fechaHasta) && (
                   <button
                     onClick={limpiarFiltros}
                     className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors font-medium"
@@ -1583,7 +1662,7 @@ export default function MovimientosPage() {
             </div>
             
             {/* Indicador de filtros aplicados */}
-            {(bancosSeleccionados.size > 0 || categoriasSeleccionadas.size > 0 || divisasSeleccionadas.size > 0 || empresasSeleccionadas.size > 0 || nombresSheetOrigenSeleccionados.size > 0 || fechaDesde || fechaHasta) && (
+            {(bancosSeleccionados.size > 0 || bancosSheetSeleccionados.size > 0 || paisesSeleccionados.size > 0 || categoriasSeleccionadas.size > 0 || divisasSeleccionadas.size > 0 || empresasSeleccionadas.size > 0 || fechaDesde || fechaHasta) && (
               <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
                 <p className="text-sm text-blue-800 font-medium mb-1">Filtros aplicados:</p>
                 <div className="flex flex-wrap gap-2 text-xs text-blue-700">
@@ -1607,9 +1686,14 @@ export default function MovimientosPage() {
                       {empresasSeleccionadas.size} empresa(s)
                     </span>
                   )}
-                  {nombresSheetOrigenSeleccionados.size > 0 && (
+                  {bancosSheetSeleccionados.size > 0 && (
                     <span className="px-2 py-1 bg-blue-100 rounded">
-                      {nombresSheetOrigenSeleccionados.size} nombre(s) sheet origen
+                      {bancosSheetSeleccionados.size} banco(s)/sheet(s)
+                    </span>
+                  )}
+                  {paisesSeleccionados.size > 0 && (
+                    <span className="px-2 py-1 bg-blue-100 rounded">
+                      {paisesSeleccionados.size} país(es)
                     </span>
                   )}
                   {fechaDesde && (
@@ -1673,6 +1757,44 @@ export default function MovimientosPage() {
               )}
             </div>
 
+            {/* Filtro de Bancos / Sheet */}
+            <div className="border border-gray-200 rounded-md">
+              <button
+                onClick={() => toggleSeccionFiltro('bancosSheet')}
+                className="w-full flex items-center justify-between p-2 hover:bg-gray-50 transition-colors"
+              >
+                <label className="text-xs font-medium text-gray-700 flex items-center gap-1.5 cursor-pointer">
+                  <Table2 className="h-3.5 w-3.5" />
+                  Bancos / Sheet
+                </label>
+                {seccionesFiltrosAbiertas.bancosSheet ? (
+                  <ChevronUp className="h-3.5 w-3.5 text-gray-600" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5 text-gray-600" />
+                )}
+              </button>
+              {seccionesFiltrosAbiertas.bancosSheet && (
+                <div className="p-1.5 pt-0">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 border border-gray-200 rounded-md p-1.5">
+                    {bancosSheet.map(nombreBancoSheet => (
+                      <label
+                        key={nombreBancoSheet}
+                        className="flex items-center gap-1.5 p-1 border border-gray-300 rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={bancosSheetSeleccionados.has(nombreBancoSheet)}
+                          onChange={() => toggleBancoSheet(nombreBancoSheet)}
+                          className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-1 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-gray-700">{nombreBancoSheet}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Filtro de Bancos */}
             <div className="border border-gray-200 rounded-md">
               <button
@@ -1704,6 +1826,44 @@ export default function MovimientosPage() {
                           className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-1 focus:ring-blue-500"
                         />
                         <span className="text-xs text-gray-700">{banco.nombre}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Filtro de País */}
+            <div className="border border-gray-200 rounded-md">
+              <button
+                onClick={() => toggleSeccionFiltro('pais')}
+                className="w-full flex items-center justify-between p-2 hover:bg-gray-50 transition-colors"
+              >
+                <label className="text-xs font-medium text-gray-700 flex items-center gap-1.5 cursor-pointer">
+                  <Globe className="h-3.5 w-3.5" />
+                  País
+                </label>
+                {seccionesFiltrosAbiertas.pais ? (
+                  <ChevronUp className="h-3.5 w-3.5 text-gray-600" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5 text-gray-600" />
+                )}
+              </button>
+              {seccionesFiltrosAbiertas.pais && (
+                <div className="p-1.5 pt-0">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 border border-gray-200 rounded-md p-1.5">
+                    {paises.map(nombrePais => (
+                      <label
+                        key={nombrePais}
+                        className="flex items-center gap-1.5 p-1 border border-gray-300 rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={paisesSeleccionados.has(nombrePais)}
+                          onChange={() => togglePais(nombrePais)}
+                          className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-1 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-gray-700">{nombrePais}</span>
                       </label>
                     ))}
                   </div>
@@ -1818,44 +1978,6 @@ export default function MovimientosPage() {
                           className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-1 focus:ring-blue-500"
                         />
                         <span className="text-xs text-gray-700">{empresa.nombre}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Filtro de Nombres Sheet Origen */}
-            <div className="border border-gray-200 rounded-md">
-              <button
-                onClick={() => toggleSeccionFiltro('nombresSheetOrigen')}
-                className="w-full flex items-center justify-between p-2 hover:bg-gray-50 transition-colors"
-              >
-                <label className="text-xs font-medium text-gray-700 flex items-center gap-1.5 cursor-pointer">
-                  <Table2 className="h-3.5 w-3.5" />
-                  Nombre Sheet Origen
-                </label>
-                {seccionesFiltrosAbiertas.nombresSheetOrigen ? (
-                  <ChevronUp className="h-3.5 w-3.5 text-gray-600" />
-                ) : (
-                  <ChevronDown className="h-3.5 w-3.5 text-gray-600" />
-                )}
-              </button>
-              {seccionesFiltrosAbiertas.nombresSheetOrigen && (
-                <div className="p-1.5 pt-0">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 border border-gray-200 rounded-md p-1.5">
-                    {nombresSheetOrigen.map(nombreSheet => (
-                      <label
-                        key={nombreSheet}
-                        className="flex items-center gap-1.5 p-1 border border-gray-300 rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={nombresSheetOrigenSeleccionados.has(nombreSheet)}
-                          onChange={() => toggleNombreSheetOrigen(nombreSheet)}
-                          className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-1 focus:ring-blue-500"
-                        />
-                        <span className="text-xs text-gray-700">{nombreSheet}</span>
                       </label>
                     ))}
                   </div>
