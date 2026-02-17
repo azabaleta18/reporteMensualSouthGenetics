@@ -63,6 +63,9 @@ export default function TablaDivisasDiarias() {
   const [bancosSeleccionados, setBancosSeleccionados] = useState<Set<number>>(new Set())
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [empresasSeleccionadas, setEmpresasSeleccionadas] = useState<Set<number>>(new Set())
+  const [paises, setPaises] = useState<string[]>([])
+  const [paisesSeleccionados, setPaisesSeleccionados] = useState<Set<string>>(new Set())
+  const [codigoPaisToNombre, setCodigoPaisToNombre] = useState<Map<string, string>>(new Map())
   // Por defecto, mostrar desde el 1 de octubre de 2025
   // Usar estado para saber si es la primera carga (para aplicar valores por defecto)
   const [primeraCarga, setPrimeraCarga] = useState<boolean>(true)
@@ -86,6 +89,7 @@ export default function TablaDivisasDiarias() {
     cargarEmpresas()
     cargarDivisasInfo()
     cargarCuentasInfo()
+    cargarPaises()
   }, [])
 
   useEffect(() => {
@@ -511,6 +515,50 @@ export default function TablaDivisasDiarias() {
     }
   }
 
+  // Cargar países desde cuentas (igual que tabla-general y movimientos)
+  const cargarPaises = async () => {
+    try {
+      const { data: cuentasPaisesData, error: errorCuentasPaises } = await supabase
+        .from('cuenta')
+        .select(`
+          banco_pais_divisa (
+            banco_pais (
+              codigo_pais,
+              pais (
+                codigo_pais,
+                nombre
+              )
+            )
+          )
+        `)
+        .eq('activo', true)
+
+      if (errorCuentasPaises) {
+        console.error('Error al cargar países desde cuentas:', errorCuentasPaises)
+        return
+      }
+
+      const paisesUnicos = new Set<string>()
+      const codigoToNombre = new Map<string, string>()
+
+      cuentasPaisesData?.forEach((c: any) => {
+        const bancoPais = c.banco_pais_divisa?.banco_pais
+        const pais = bancoPais?.pais
+        const codigoPais = bancoPais?.codigo_pais || pais?.codigo_pais
+        const nombrePais = (pais?.nombre || '').trim()
+        if (nombrePais) {
+          paisesUnicos.add(nombrePais)
+          if (codigoPais) codigoToNombre.set(codigoPais, nombrePais)
+        }
+      })
+
+      setPaises(Array.from(paisesUnicos).sort())
+      setCodigoPaisToNombre(codigoToNombre)
+    } catch (err: any) {
+      console.error('Error al cargar países:', err)
+    }
+  }
+
   // Calcular saldos desde movimientos con categorías seleccionadas
   const calcularSaldosPorCategoria = async () => {
     try {
@@ -849,6 +897,7 @@ export default function TablaDivisasDiarias() {
           saldo_divisa,
           id_banco: banco?.id_banco || 0,
           id_empresa,
+          nombre_pais: pais?.nombre || null,
         }
       } else {
         // Estructura nueva (datos de la vista v_saldo_diario_cuentas_usd)
@@ -916,12 +965,13 @@ export default function TablaDivisasDiarias() {
           saldo_divisa,
           id_banco,
           id_empresa,
+          nombre_pais: codigoPaisToNombre.get(codigo_pais || '') || null,
         }
       }
     })
 
-    // Aplicar filtros de fecha, banco y empresa
-    if (fechaDesde || fechaHasta || bancosSeleccionados.size > 0 || empresasSeleccionadas.size > 0) {
+    // Aplicar filtros de fecha, banco, empresa y país
+    if (fechaDesde || fechaHasta || bancosSeleccionados.size > 0 || empresasSeleccionadas.size > 0 || paisesSeleccionados.size > 0) {
       registros = registros.filter(registro => {
         // Filtro por fecha
         if (fechaDesde && registro.fecha < fechaDesde) {
@@ -943,6 +993,14 @@ export default function TablaDivisasDiarias() {
         if (empresasSeleccionadas.size > 0) {
           const empresaId = registro.id_empresa
           if (!empresaId || !empresasSeleccionadas.has(empresaId)) {
+            return false
+          }
+        }
+        
+        // Filtro por país (igual que tabla-general y movimientos)
+        if (paisesSeleccionados.size > 0) {
+          const nombrePais = ((registro as any).nombre_pais || '').trim()
+          if (!nombrePais || !paisesSeleccionados.has(nombrePais)) {
             return false
           }
         }
@@ -984,7 +1042,7 @@ export default function TablaDivisasDiarias() {
     }
 
     return registros
-  }, [datos, categoriasSeleccionadas, saldosPorCategoria, fechaDesde, fechaHasta, bancosSeleccionados, empresasSeleccionadas, divisasInfo, cuentasInfo])
+  }, [datos, categoriasSeleccionadas, saldosPorCategoria, fechaDesde, fechaHasta, bancosSeleccionados, empresasSeleccionadas, paisesSeleccionados, codigoPaisToNombre, divisasInfo, cuentasInfo])
 
   // Mapear datos crudos para acceder a saldo_usd por fecha (calculado dinámicamente)
   // IMPORTANTE: Solo calcular para divisas seleccionadas
@@ -2004,6 +2062,19 @@ export default function TablaDivisasDiarias() {
               return newSet
             })
           }}
+          paises={paises}
+          paisesSeleccionados={paisesSeleccionados}
+          onTogglePais={(nombrePais) => {
+            setPaisesSeleccionados(prev => {
+              const newSet = new Set(prev)
+              if (newSet.has(nombrePais)) {
+                newSet.delete(nombrePais)
+              } else {
+                newSet.add(nombrePais)
+              }
+              return newSet
+            })
+          }}
           fechaDesde={fechaDesde}
           fechaHasta={fechaHasta}
           onFechaDesdeChange={setFechaDesde}
@@ -2132,6 +2203,19 @@ export default function TablaDivisasDiarias() {
               newSet.delete(idEmpresa)
             } else {
               newSet.add(idEmpresa)
+            }
+            return newSet
+          })
+        }}
+        paises={paises}
+        paisesSeleccionados={paisesSeleccionados}
+        onTogglePais={(nombrePais) => {
+          setPaisesSeleccionados(prev => {
+            const newSet = new Set(prev)
+            if (newSet.has(nombrePais)) {
+              newSet.delete(nombrePais)
+            } else {
+              newSet.add(nombrePais)
             }
             return newSet
           })

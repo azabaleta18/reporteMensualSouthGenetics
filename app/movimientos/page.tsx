@@ -324,9 +324,16 @@ export default function MovimientosPage() {
           const pais = bancoPaisDivisa?.banco_pais?.pais
           const divisa = bancoPaisDivisa?.divisa?.codigo_divisa
           
-          // Filtrar por banco (si hay bancos seleccionados y no hay filtroCuentaId)
-          if (filtrosBancos.size > 0 && !filtroCuentaId) {
-            if (!banco?.id_banco || !filtrosBancos.has(banco.id_banco)) {
+          // Filtrar por bancos: si hay selección en ambos (id_banco y sheet), usar OR
+          if ((filtrosBancos.size > 0 || filtrosBancosSheet.size > 0) && !filtroCuentaId) {
+            const matchIdBanco = filtrosBancos.size > 0 && banco?.id_banco && filtrosBancos.has(banco.id_banco)
+            const matchSheet = filtrosBancosSheet.size > 0 && (() => {
+              const nombreSheet = cuenta?.nombre_sheet_origen
+              const nombreBanco = banco?.nombre
+              const nombreBancoSheet = nombreSheet || nombreBanco
+              return !!nombreBancoSheet && filtrosBancosSheet.has(nombreBancoSheet)
+            })()
+            if (!matchIdBanco && !matchSheet) {
               return false
             }
           }
@@ -345,19 +352,9 @@ export default function MovimientosPage() {
             }
           }
 
-          // Filtrar por bancos/sheet (nombre_sheet_origen o nombre_banco)
-          if (filtrosBancosSheet.size > 0) {
-            const nombreSheet = cuenta?.nombre_sheet_origen
-            const nombreBanco = banco?.nombre
-            const nombreBancoSheet = nombreSheet || nombreBanco
-            if (!nombreBancoSheet || !filtrosBancosSheet.has(nombreBancoSheet)) {
-              return false
-            }
-          }
-
-          // Filtrar por país
+          // Filtrar por país (trim para evitar problemas de espacios)
           if (filtrosPaises.size > 0) {
-            const nombrePais = pais?.nombre
+            const nombrePais = (pais?.nombre || '').trim()
             if (!nombrePais || !filtrosPaises.has(nombrePais)) {
               return false
             }
@@ -793,7 +790,7 @@ export default function MovimientosPage() {
       } else if (cuentasPaisesData) {
         const paisesUnicos = new Set<string>()
         cuentasPaisesData.forEach(c => {
-          const nombrePais = (c.banco_pais_divisa as any)?.banco_pais?.pais?.nombre
+          const nombrePais = ((c.banco_pais_divisa as any)?.banco_pais?.pais?.nombre || '').trim()
           if (nombrePais) paisesUnicos.add(nombrePais)
         })
         setPaises(Array.from(paisesUnicos).sort())

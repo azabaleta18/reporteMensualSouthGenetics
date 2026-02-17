@@ -271,6 +271,10 @@ export default function TablaGeneral() {
                   banco (
                     id_banco,
                     nombre
+                  ),
+                  pais (
+                    codigo_pais,
+                    nombre
                   )
                 )
               )
@@ -312,6 +316,7 @@ export default function TablaGeneral() {
               const divisa = bancoPaisDivisa?.divisa
               const bancoPais = bancoPaisDivisa?.banco_pais
               const banco = bancoPais?.banco
+              const pais = bancoPais?.pais
               const categoria = m.categoria_movimiento as any
 
               // Usar nombre_sheet_origen si está disponible, sino usar nombre del banco
@@ -366,6 +371,7 @@ export default function TablaGeneral() {
                 codigo_divisa: divisa?.codigo_divisa || '',
                 nombre_banco: nombreBanco,
                 nombre_sheet_origen: cuenta?.nombre_sheet_origen || null,
+                nombre_pais: pais?.nombre || null,
                 simbolo_divisa: divisa?.simbolo || '$',
                 decimales_divisa: divisa?.decimales || 2,
                 id_banco: banco?.id_banco || 0,
@@ -494,7 +500,7 @@ export default function TablaGeneral() {
         } else if (cuentasPaisesData) {
           const paisesUnicos = new Set<string>()
           cuentasPaisesData.forEach(c => {
-            const nombrePais = (c.banco_pais_divisa as any)?.banco_pais?.pais?.nombre
+            const nombrePais = ((c.banco_pais_divisa as any)?.banco_pais?.pais?.nombre || '').trim()
             if (nombrePais) paisesUnicos.add(nombrePais)
           })
           setPaises(Array.from(paisesUnicos).sort())
@@ -597,25 +603,27 @@ export default function TablaGeneral() {
       )
     }
     
-    // Filtrar por bancos/sheets (nombre_sheet_origen o nombre_banco)
-    if (bancosSheetSeleccionados.size > 0) {
+    // Filtrar por bancos: si hay selección en ambos filtros (sheet e id_banco), usar OR
+    // para que al elegir un banco de cada lista se muestre la unión, no la intersección
+    if (bancosSheetSeleccionados.size > 0 || bancosSeleccionados.size > 0) {
       movimientosFilt = movimientosFilt.filter(mov => {
-        const nombreBancoSheet = mov.nombre_sheet_origen || mov.nombre_banco
-        return nombreBancoSheet && bancosSheetSeleccionados.has(nombreBancoSheet)
+        const matchSheet = bancosSheetSeleccionados.size > 0
+          ? (() => {
+              const nombreBancoSheet = mov.nombre_sheet_origen || mov.nombre_banco
+              return !!nombreBancoSheet && bancosSheetSeleccionados.has(nombreBancoSheet)
+            })()
+          : false
+        const matchIdBanco = bancosSeleccionados.size > 0
+          ? !!(mov.id_banco && bancosSeleccionados.has(mov.id_banco))
+          : false
+        return matchSheet || matchIdBanco
       })
     }
     
-    // Filtrar por bancos (id_banco)
-    if (bancosSeleccionados.size > 0) {
-      movimientosFilt = movimientosFilt.filter(mov => {
-        return mov.id_banco && bancosSeleccionados.has(mov.id_banco)
-      })
-    }
-    
-    // Filtrar por país
+    // Filtrar por país (trim para consistencia con otras tablas)
     if (paisesSeleccionados.size > 0) {
       movimientosFilt = movimientosFilt.filter(mov => {
-        const nombrePais = mov.nombre_pais
+        const nombrePais = (mov.nombre_pais || '').trim()
         return nombrePais && paisesSeleccionados.has(nombrePais)
       })
     }
@@ -640,7 +648,7 @@ export default function TablaGeneral() {
   // Usar movimientosFiltrados solo para determinar qué mostrar (columnas, filas)
   // PERO los cálculos de saldo siempre usan TODOS los movimientos (sin filtrar)
   const movimientosParaCalcular = movimientosFiltrados.length > 0 || 
-    (fechaDesde || fechaHasta || divisasSeleccionadas.size > 0 || bancosSeleccionados.size > 0 || categoriasSeleccionadas.size > 0)
+    (fechaDesde || fechaHasta || divisasSeleccionadas.size > 0 || bancosSeleccionados.size > 0 || bancosSheetSeleccionados.size > 0 || categoriasSeleccionadas.size > 0)
     ? movimientosFiltrados 
     : movimientos
 
@@ -773,12 +781,10 @@ export default function TablaGeneral() {
   }, [movimientosParaCalcular])
 
   // Obtener fechas por mes, año, banco y divisa
-  // Usar nombre_sheet_origen si está disponible para que coincida con la tabla de saldos diarios
+  // Usar movimientosParaCalcular (filtrados) para que el filtro de fechas muestre solo los días del rango
   const fechasPorMesAnoBancoDivisa = useMemo(() => {
     const mapa = new Map<string, string[]>() // "divisa|banco|año|mes" -> fechas[]
-    // IMPORTANTE: Usar TODOS los movimientos (no solo los filtrados) para construir las fechas
-    // Esto asegura que cuando se expande un mes, se muestren todas las fechas disponibles
-    movimientos.forEach(mov => {
+    movimientosParaCalcular.forEach(mov => {
       const nombreBanco = mov.nombre_sheet_origen || mov.nombre_banco
       const fecha = parsearFechaLocal(mov.fecha_mov)
       const año = fecha.getFullYear()
@@ -803,7 +809,7 @@ export default function TablaGeneral() {
       })
     })
     return mapa
-  }, [movimientos])
+  }, [movimientosParaCalcular])
 
   // Agrupar movimientos por categoría (para determinar qué mostrar)
   const movimientosPorCategoria = useMemo(() => {

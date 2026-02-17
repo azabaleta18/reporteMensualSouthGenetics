@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Calendar, Building2, Filter, X, Tag, DollarSign, Briefcase, ChevronDown, ChevronUp } from 'lucide-react'
+import { Calendar, Building2, Filter, X, Tag, DollarSign, Briefcase, ChevronDown, ChevronUp, Globe } from 'lucide-react'
 
 interface Categoria {
   id_categoria: number
@@ -38,6 +38,9 @@ interface FiltrosTablaDivisasProps {
   empresas?: Empresa[]
   empresasSeleccionadas?: Set<number>
   onToggleEmpresa?: (idEmpresa: number) => void
+  paises?: string[]
+  paisesSeleccionados?: Set<string>
+  onTogglePais?: (nombrePais: string) => void
   fechaDesde?: string
   fechaHasta?: string
   onFechaDesdeChange?: (fecha: string) => void
@@ -69,6 +72,9 @@ export default function FiltrosTablaDivisas({
   empresas = [],
   empresasSeleccionadas = new Set(),
   onToggleEmpresa,
+  paises = [],
+  paisesSeleccionados = new Set(),
+  onTogglePais,
   fechaDesde = '',
   fechaHasta = '',
   onFechaDesdeChange,
@@ -118,6 +124,11 @@ export default function FiltrosTablaDivisas({
         onToggleEmpresa(empresaId)
       })
     }
+    if (onTogglePais) {
+      paisesSeleccionados.forEach(nombrePais => {
+        onTogglePais(nombrePais)
+      })
+    }
     if (onFechaDesdeChange) {
       onFechaDesdeChange('')
     }
@@ -129,6 +140,7 @@ export default function FiltrosTablaDivisas({
   const tieneFiltrosActivos = categoriasSeleccionadas.size > 0 || 
     bancosSeleccionados.size > 0 || 
     empresasSeleccionadas.size > 0 || 
+    paisesSeleccionados.size > 0 ||
     fechaDesde || 
     fechaHasta
 
@@ -186,6 +198,11 @@ export default function FiltrosTablaDivisas({
             {empresasSeleccionadas.size > 0 && (
               <span className="px-2 py-1 bg-blue-100 rounded">
                 {empresasSeleccionadas.size} empresa(s)
+              </span>
+            )}
+            {paisesSeleccionados.size > 0 && (
+              <span className="px-2 py-1 bg-blue-100 rounded">
+                {paisesSeleccionados.size} país(es)
               </span>
             )}
             {fechaDesde && (
@@ -265,6 +282,32 @@ export default function FiltrosTablaDivisas({
                     className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                   />
                   <span className="text-sm text-gray-700">{banco.nombre}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Filtro de Países */}
+        {paises.length > 0 && onTogglePais && (
+          <div>
+            <label className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+              <Globe className="h-4 w-4" />
+              Países
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md p-2">
+              {paises.map(nombrePais => (
+                <label
+                  key={nombrePais}
+                  className="flex items-center gap-2 p-2 border border-gray-300 rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={paisesSeleccionados.has(nombrePais)}
+                    onChange={() => onTogglePais(nombrePais)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">{nombrePais}</span>
                 </label>
               ))}
             </div>
